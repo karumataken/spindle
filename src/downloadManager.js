@@ -4,6 +4,7 @@ import { renderSidebarView, updatePlayerUI, isPlaceholderArt, cleanPlaylistTitle
 
 let isInitialized = false;
 const activeJobs = new Map();
+let unsubscribeFns = [];
 
 export function initDownloadManager() {
     if (isInitialized) return;
@@ -11,7 +12,7 @@ export function initDownloadManager() {
     isInitialized = true;
 
     // 1. Tracks discovered (1-2s after starting)
-    window.spindleDesktop.onImportDiscovered((data) => {
+    const offDiscovered = window.spindleDesktop.onImportDiscovered((data) => {
         const { jobId, targetPlaylistId, isPlaylist, playlistTitle, playlistThumbnail, entries, entry } = data;
         const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
         if (!targetPl) return;
@@ -161,7 +162,7 @@ export function initDownloadManager() {
     });
 
     // 2. Individual track download & conversion completed
-    window.spindleDesktop.onTrackReady((data) => {
+    const offTrackReady = window.spindleDesktop.onTrackReady((data) => {
         const { jobId, targetPlaylistId, ytId, title, artist, duration, filePath, url, artwork } = data;
         const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
         if (!targetPl) return;
@@ -244,7 +245,7 @@ export function initDownloadManager() {
     });
 
     // 3. Batch download completed
-    window.spindleDesktop.onImportCompleted((data) => {
+    const offCompleted = window.spindleDesktop.onImportCompleted((data) => {
         const { jobId, targetPlaylistId } = data;
         const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
         if (targetPl) {
@@ -266,7 +267,7 @@ export function initDownloadManager() {
     });
 
     // 4. Batch error
-    window.spindleDesktop.onImportError((data) => {
+    const offError = window.spindleDesktop.onImportError((data) => {
         const { jobId, targetPlaylistId, error } = data;
         console.warn('Import error:', error);
         const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
@@ -296,6 +297,17 @@ export function initDownloadManager() {
         showAlertModal('Import Error', userMsg);
         activeJobs.delete(jobId);
     });
+
+    unsubscribeFns = [offDiscovered, offTrackReady, offCompleted, offError].filter(fn => typeof fn === 'function');
+}
+
+export function cleanupDownloadManager() {
+    unsubscribeFns.forEach(fn => {
+        try { fn(); } catch (_) {}
+    });
+    unsubscribeFns = [];
+    activeJobs.clear();
+    isInitialized = false;
 }
 
 export function startBackgroundImport({ url, targetPlaylistId, playlistName, placeholderId = null }) {

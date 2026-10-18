@@ -971,12 +971,12 @@ export async function removePlaylist(playlistId) {
     updatePlayerUI();
 }
 
-export function removeSongFromPlaylist(playlistId, songIndex) {
+export async function removeSongFromPlaylist(playlistId, songIndex) {
     const pl = AppState.playlists.find(p => p.id === playlistId);
     if (!pl) return;
 
     const isPlayingThisPl = (AppState.playingPlaylistId === playlistId);
-    pl.trackIds.splice(songIndex, 1);
+    const [removedTrackId] = pl.trackIds.splice(songIndex, 1);
 
     if (isPlayingThisPl) {
         if (pl.trackIds.length === 0) {
@@ -993,7 +993,28 @@ export function removeSongFromPlaylist(playlistId, songIndex) {
         }
     }
 
-    persistState();
+    // If the removed track is no longer referenced by any playlist, clean up its blob and ObjectURL
+    if (removedTrackId) {
+        const stillReferenced = AppState.playlists.some(
+            otherPl => Array.isArray(otherPl.trackIds) && otherPl.trackIds.includes(removedTrackId)
+        );
+        if (!stillReferenced) {
+            const track = AppState.tracksById[removedTrackId];
+            if (track && !track.isSynth) {
+                try {
+                    await storageDB.deleteAudioBlob(removedTrackId);
+                } catch (e) {
+                    console.warn('Error deleting audio blob:', e);
+                }
+                if (track.url && track.url.startsWith('blob:')) {
+                    URL.revokeObjectURL(track.url);
+                }
+                delete AppState.tracksById[removedTrackId];
+            }
+        }
+    }
+
+    await persistState();
     renderSidebarView();
     updatePlayerUI();
 }
@@ -1669,7 +1690,12 @@ export async function handleLocalFiles(fileList, targetPlaylistId = null) {
         destPl.trackIds.push(id);
         await storageDB.saveAudioBlob(id, file);
 
-        const tempAudio = new Audio(url);
+        const tempAudio = new Audio();
+        tempAudio.preload = 'metadata';
+        const cleanupTempAudio = () => {
+            tempAudio.removeAttribute('src');
+            tempAudio.load();
+        };
         tempAudio.addEventListener('loadedmetadata', () => {
             if (tempAudio.duration && !isNaN(tempAudio.duration)) {
                 newTrack.duration = tempAudio.duration;
@@ -1680,7 +1706,10 @@ export async function handleLocalFiles(fileList, targetPlaylistId = null) {
                 renderSidebarView();
                 updatePlayerUI();
             }
-        });
+            cleanupTempAudio();
+        }, { once: true });
+        tempAudio.addEventListener('error', cleanupTempAudio, { once: true });
+        tempAudio.src = url;
     }
 
     await persistState();

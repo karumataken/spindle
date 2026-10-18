@@ -28,7 +28,7 @@ import {
     upgradeArtworkUrl,
     handleAudioLoadError
 } from './ui.js';
-import { initDownloadManager } from './downloadManager.js';
+import { initDownloadManager, cleanupDownloadManager } from './downloadManager.js';
 
 async function hydrateLibrary() {
     await storageDB.init();
@@ -519,7 +519,7 @@ async function initApp() {
     });
 
     // Timer ticker for built-in synth tracks
-    setInterval(() => {
+    const synthIntervalId = setInterval(() => {
         const track = getCurrentTrack();
         if (AppState.playbackState === 'PLAYING' && track && track.isSynth && !AppState.isSeeking) {
             const tt = getTurntable();
@@ -533,14 +533,30 @@ async function initApp() {
         }
     }, 250);
 
+    let rafId = null;
     function animate() {
-        requestAnimationFrame(animate);
+        rafId = requestAnimationFrame(animate);
         const currentTurntable = getTurntable();
         if (currentTurntable) {
             currentTurntable.update();
         }
     }
     animate();
+
+    window.addEventListener('beforeunload', () => {
+        clearInterval(synthIntervalId);
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        cleanupDownloadManager();
+        for (const track of Object.values(AppState.tracksById)) {
+            if (track && typeof track.url === 'string' && track.url.startsWith('blob:')) {
+                URL.revokeObjectURL(track.url);
+            }
+        }
+        const currentTurntable = getTurntable();
+        if (currentTurntable && typeof currentTurntable.dispose === 'function') {
+            currentTurntable.dispose();
+        }
+    });
 }
 
 if (document.readyState === 'loading') {

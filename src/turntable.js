@@ -47,12 +47,29 @@ export class Turntable3D {
         this.controls.enabled = !this.introMode;
         this.isTransitioningFromIntro = false;
 
+        this._needsRender = true;
+        this._controlsActiveUntil = performance.now() + 1000;
+        this._baseVinylCanvas = null;
+        this._interactiveArmTargets = null;
+
+        this._onControlsActivity = () => {
+            this._controlsActiveUntil = performance.now() + 900;
+            this._needsRender = true;
+        };
+        this.controls.addEventListener('change', () => {
+            this._needsRender = true;
+        });
+        this.controls.addEventListener('start', this._onControlsActivity);
+
         // Cancel automated camera transition if user manually grabs the orbit canvas (only after intro)
-        this.renderer.domElement.addEventListener('pointerdown', () => {
+        this._onCanvasCancelCamAnim = () => {
+            this._onControlsActivity();
             if (!this.introMode && !this.isTransitioningFromIntro) {
                 this.camAnim = null;
             }
-        });
+        };
+        this.renderer.domElement.addEventListener('pointerdown', this._onCanvasCancelCamAnim);
+        this.renderer.domElement.addEventListener('wheel', this._onControlsActivity, { passive: true });
 
         this.clock = new THREE.Clock();
         this.currentRPM = 0;
@@ -360,8 +377,10 @@ export class Turntable3D {
         return tex;
     }
 
-    // Deep Charcoal Vinyl Grooves + Anisotropic Butterfly Sheen + Dynamic Record Label
-    createVinylTexture(track) {
+    // Pre-bake static charcoal vinyl grooves + anisotropic butterfly sheen once and reuse across track switches
+    _getBaseVinylCanvas() {
+        if (this._baseVinylCanvas) return this._baseVinylCanvas;
+
         const canvas = document.createElement('canvas');
         canvas.width = 1024;
         canvas.height = 1024;
@@ -440,6 +459,21 @@ export class Turntable3D {
             ctx.lineWidth = 0.8;
             ctx.stroke();
         }
+
+        this._baseVinylCanvas = canvas;
+        return canvas;
+    }
+
+    // Deep Charcoal Vinyl Grooves + Anisotropic Butterfly Sheen + Dynamic Record Label
+    createVinylTexture(track) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        const cx = 512, cy = 512;
+
+        // Blit pre-baked vinyl grooves & butterfly reflection sheen
+        ctx.drawImage(this._getBaseVinylCanvas(), 0, 0);
 
         // 6. Center Vinyl Label
         const labelRadius = 165;
@@ -551,6 +585,7 @@ export class Turntable3D {
             this.dirLight.intensity = 1.25;
             this.renderer.toneMappingExposure = 1.02;
         }
+        this._needsRender = true;
     }
 
     // --- TURNTABLE 3D MESH HIERARCHY ---
@@ -703,6 +738,9 @@ export class Turntable3D {
         this.turntableGroup.add(deck);
 
         // Corner Hex Socket Cap Bolts & Washers
+        const washerGeo = new THREE.CylinderGeometry(0.048, 0.048, 0.006, 20);
+        const boltGeo = new THREE.CylinderGeometry(0.032, 0.032, 0.018, 16);
+        const hexSocketGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.02, 6);
         const boltCoords = [
             [-2.23, 0.322, -1.73],
             [2.23, 0.322, -1.73],
@@ -710,15 +748,15 @@ export class Turntable3D {
             [2.23, 0.322, 1.73]
         ];
         boltCoords.forEach(([bx, by, bz]) => {
-            const washer = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.048, 0.006, 20), machinedAlumMat);
+            const washer = new THREE.Mesh(washerGeo, machinedAlumMat);
             washer.position.set(bx, by, bz);
             this.turntableGroup.add(washer);
 
-            const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.018, 16), chromeMat);
+            const bolt = new THREE.Mesh(boltGeo, chromeMat);
             bolt.position.set(bx, by + 0.006, bz);
             this.turntableGroup.add(bolt);
 
-            const hexSocket = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 6), darkMat);
+            const hexSocket = new THREE.Mesh(hexSocketGeo, darkMat);
             hexSocket.position.set(bx, by + 0.008, bz);
             this.turntableGroup.add(hexSocket);
         });
@@ -742,6 +780,9 @@ export class Turntable3D {
         this.turntableGroup.add(adapterHole);
 
         // Multi-Tiered Vibration-Damped Isolation Feet
+        const footRubberGeo = new THREE.CylinderGeometry(0.29, 0.25, 0.11, 32);
+        const footAlumSkirtGeo = new THREE.CylinderGeometry(0.31, 0.295, 0.07, 32);
+        const footCollarGeo = new THREE.CylinderGeometry(0.315, 0.315, 0.035, 32);
         const footPositions = [
             [-2.15, -0.36, -1.65],
             [2.15, -0.36, -1.65],
@@ -749,16 +790,16 @@ export class Turntable3D {
             [2.15, -0.36, 1.65]
         ];
         footPositions.forEach(([fx, fy, fz]) => {
-            const footRubber = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.25, 0.11, 32), rubberMat);
+            const footRubber = new THREE.Mesh(footRubberGeo, rubberMat);
             footRubber.position.set(fx, fy - 0.035, fz);
             footRubber.castShadow = true;
             this.turntableGroup.add(footRubber);
 
-            const footAlumSkirt = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.295, 0.07, 32), machinedAlumMat);
+            const footAlumSkirt = new THREE.Mesh(footAlumSkirtGeo, machinedAlumMat);
             footAlumSkirt.position.set(fx, fy + 0.03, fz);
             this.turntableGroup.add(footAlumSkirt);
 
-            const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.315, 0.315, 0.035, 32), brassMat);
+            const collar = new THREE.Mesh(footCollarGeo, brassMat);
             collar.position.set(fx, fy + 0.065, fz);
             this.turntableGroup.add(collar);
         });
@@ -783,19 +824,21 @@ export class Turntable3D {
         platterTopRim.position.y = 0.065;
         this.platterGroup.add(platterTopRim);
 
-        // 60 Equally Distanced Vertical Pairs of Stroboscopic Teeth
+        // 60 Equally Distanced Vertical Pairs of Stroboscopic Teeth (shared geometries)
         const dotCount = 60;
+        const upperToothGeo = new THREE.BoxGeometry(0.032, 0.032, 0.02);
+        const lowerToothGeo = new THREE.BoxGeometry(0.026, 0.024, 0.02);
         for (let i = 0; i < dotCount; i++) {
             const angle = (i / dotCount) * Math.PI * 2;
             const cosA = Math.cos(angle);
             const sinA = Math.sin(angle);
 
-            const upperTooth = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.032, 0.02), darkMat);
+            const upperTooth = new THREE.Mesh(upperToothGeo, darkMat);
             upperTooth.position.set(cosA * 1.702, 0.022, sinA * 1.702);
             upperTooth.rotation.y = -angle;
             this.platterGroup.add(upperTooth);
 
-            const lowerTooth = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.024, 0.02), darkMat);
+            const lowerTooth = new THREE.Mesh(lowerToothGeo, darkMat);
             lowerTooth.position.set(cosA * 1.722, -0.022, sinA * 1.722);
             lowerTooth.rotation.y = -angle;
             this.platterGroup.add(lowerTooth);
@@ -1361,7 +1404,7 @@ export class Turntable3D {
 
         const speedBtnCap = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.08, 24), chromeMat);
         speedBtnCap.position.set(1.25, 0.348, 1.48);
-        this.turntableGroup.add(speedBtn);
+        this.turntableGroup.add(speedBtnCap);
 
         // 8. Hinged Smoked-Acrylic Dust Cover with Spring Hinges & Corner Bumpers
         [-1.8, 1.8].forEach(hx => {
@@ -1396,20 +1439,22 @@ export class Turntable3D {
             depthWrite: false
         });
 
-        const coverShell = new THREE.Mesh(new THREE.BoxGeometry(4.96, 0.72, 3.92), acrylicMat);
+        const coverBoxGeo = new THREE.BoxGeometry(4.96, 0.72, 3.92);
+        const coverShell = new THREE.Mesh(coverBoxGeo, acrylicMat);
         coverShell.position.set(0, 0.36, 1.96);
         this.dustCoverGroup.add(coverShell);
 
         const coverEdges = new THREE.LineSegments(
-            new THREE.EdgesGeometry(new THREE.BoxGeometry(4.96, 0.72, 3.92)),
+            new THREE.EdgesGeometry(coverBoxGeo),
             new THREE.LineBasicMaterial({ color: 0xFFFDF8, transparent: true, opacity: 0.34 })
         );
         coverEdges.position.set(0, 0.36, 1.96);
         this.dustCoverGroup.add(coverEdges);
 
         // Front Rubber Cushion Bumpers on the Dust Cover
+        const bumperGeo = new THREE.CylinderGeometry(0.035, 0.035, 0.02, 16);
         [-2.32, 2.32].forEach(bx => {
-            const bumper = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.02, 16), rubberMat);
+            const bumper = new THREE.Mesh(bumperGeo, rubberMat);
             bumper.position.set(bx, 0.01, 3.86);
             this.dustCoverGroup.add(bumper);
         });
@@ -1421,6 +1466,7 @@ export class Turntable3D {
 
     toggleDustCover() {
         this.dustCoverOpen = !this.dustCoverOpen;
+        this._needsRender = true;
         return this.dustCoverOpen;
     }
 
@@ -1428,11 +1474,13 @@ export class Turntable3D {
         this.introMode = false;
         this.isTransitioningFromIntro = true;
         this.dustCoverOpen = true;
+        this._needsRender = true;
         this.setCameraView('iso');
 
         setTimeout(() => {
             this.isTransitioningFromIntro = false;
             this.controls.enabled = true;
+            this._needsRender = true;
         }, 1700);
 
         const coverBtn = document.getElementById('btn-cover-toggle');
@@ -1448,6 +1496,7 @@ export class Turntable3D {
         this.vinylMat.map = newTex;
         this.vinylMat.bumpMap = newTex;
         this.vinylMat.needsUpdate = true;
+        this._needsRender = true;
     }
 
     triggerTrackChange(track, autoPlay = true, startSec = 0) {
@@ -1456,6 +1505,7 @@ export class Turntable3D {
         this.pendingTrack = track;
         this.pendingAutoPlay = autoPlay;
         this.pendingStartSec = startSec;
+        this._needsRender = true;
 
         if (this.mechState === 'IDLE_STOPPED') {
             this.updateRecordLabel(track);
@@ -1510,6 +1560,7 @@ export class Turntable3D {
             elapsed: 0,
             duration: 1.65 // 1.65s cinematic orbital glide
         };
+        this._needsRender = true;
 
         // Sync the manual camera preset buttons in the top-right HUD
         document.querySelectorAll('.cam-btn').forEach(btn => {
@@ -1529,13 +1580,26 @@ export class Turntable3D {
         this.camera.aspect = w / h;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(w, h);
+        this._needsRender = true;
     }
 
     bindResize() {
-        window.addEventListener('resize', () => this.resize());
+        this._onWindowResize = () => this.resize();
+        this._onVisibilityChange = () => {
+            if (!document.hidden) {
+                this.clock.getDelta(); // Reset delta after background pause
+                this._needsRender = true;
+            }
+        };
+        window.addEventListener('resize', this._onWindowResize);
+        document.addEventListener('visibilitychange', this._onVisibilityChange);
     }
 
     update() {
+        if (!this.renderer || (typeof document !== 'undefined' && document.hidden)) {
+            return;
+        }
+
         const dt = Math.min(this.clock.getDelta(), 0.1);
         const elapsed = this.clock.getElapsedTime();
 
@@ -1548,9 +1612,36 @@ export class Turntable3D {
                 if (Math.abs(this.camera.aspect - targetAspect) > 0.001) {
                     this.camera.aspect = targetAspect;
                     this.camera.updateProjectionMatrix();
+                    this._needsRender = true;
                 }
             }
         }
+
+        const forceOpen = this.recordHeight > 0.15;
+        const targetCoverAngle = (this.dustCoverOpen || forceOpen) ? 1.02 : 0.0;
+        const coverSettling = Math.abs(targetCoverAngle - this.dustCoverAngle) > 0.0005;
+        const armOrRecordSettling =
+            Math.abs(this.armPitch) > 0.0005 ||
+            Math.abs(this.armYaw) > 0.0005 ||
+            Math.abs(this.recordHeight) > 0.0005 ||
+            Math.abs(-0.35 - this.powerSwitchAngle) > 0.0005;
+        const controlsActive = performance.now() < this._controlsActiveUntil;
+
+        const isSceneActive =
+            this._needsRender ||
+            this.mechState !== 'IDLE_STOPPED' ||
+            this.currentRPM > 0.001 ||
+            this.targetRPM > 0 ||
+            this.camAnim !== null ||
+            this.isDraggingTonearm ||
+            coverSettling ||
+            armOrRecordSettling ||
+            controlsActive;
+
+        if (!isSceneActive) {
+            return;
+        }
+        this._needsRender = false;
 
         const progress = AppState.duration > 0
             ? Math.min(1, Math.max(0, AppState.currentTime / AppState.duration))
@@ -1565,6 +1656,10 @@ export class Turntable3D {
                 this.armYaw += (0.0 - this.armYaw) * 6 * dt;
                 this.recordHeight += (0.0 - this.recordHeight) * 7 * dt;
                 this.powerSwitchAngle += (-0.35 - this.powerSwitchAngle) * 8 * dt;
+                if (Math.abs(this.armPitch) < 0.0005) this.armPitch = 0;
+                if (Math.abs(this.armYaw) < 0.0005) this.armYaw = 0;
+                if (Math.abs(this.recordHeight) < 0.0005) this.recordHeight = 0;
+                if (Math.abs(-0.35 - this.powerSwitchAngle) < 0.0005) this.powerSwitchAngle = -0.35;
                 break;
 
             case 'SWAPPING_OUT':
@@ -1706,9 +1801,10 @@ export class Turntable3D {
             this.cueLever.rotation.x = -this.armPitch * 2.4;
         }
 
-        const forceOpen = this.recordHeight > 0.15;
-        const targetCoverAngle = (this.dustCoverOpen || forceOpen) ? 1.02 : 0.0;
         this.dustCoverAngle += (targetCoverAngle - this.dustCoverAngle) * 5 * dt;
+        if (Math.abs(targetCoverAngle - this.dustCoverAngle) < 0.0005) {
+            this.dustCoverAngle = targetCoverAngle;
+        }
         if (this.dustCoverGroup) {
             this.dustCoverGroup.rotation.x = -this.dustCoverAngle;
         }
@@ -1770,6 +1866,7 @@ export class Turntable3D {
         };
 
         const getInteractiveArmTargets = () => {
+            if (this._interactiveArmTargets) return this._interactiveArmTargets;
             const targets = [];
             if (this.tonearmHitbox) targets.push(this.tonearmHitbox);
             if (this.sArmMesh) targets.push(this.sArmMesh);
@@ -1779,14 +1876,16 @@ export class Turntable3D {
                 });
             }
             if (this.cueLever) targets.push(this.cueLever);
+            this._interactiveArmTargets = targets;
             return targets;
         };
 
-        dom.addEventListener('pointermove', (e) => {
+        this._onDomPointerMove = (e) => {
             if (this.introMode) return;
             updateMouseCoords(e);
 
             if (this.isDraggingTonearm) {
+                this._needsRender = true;
                 this.raycaster.setFromCamera(this.mouse, this.camera);
                 if (this.raycaster.ray.intersectPlane(this.virtualPlatterPlane, this.planeIntersectPoint)) {
                     const dx = 1.65 - this.planeIntersectPoint.x;
@@ -1848,9 +1947,9 @@ export class Turntable3D {
 
             this.isHoveringRecord = false;
             dom.style.cursor = '';
-        });
+        };
 
-        dom.addEventListener('pointerdown', (e) => {
+        this._onDomPointerDown = (e) => {
             if (this.introMode || this.isTransitioningFromIntro) return;
             if (e.button !== 0) return;
             updateMouseCoords(e);
@@ -1861,6 +1960,7 @@ export class Turntable3D {
             if (armHits.length > 0) {
                 this.isDraggingTonearm = true;
                 this.controls.enabled = false;
+                this._needsRender = true;
                 dom.style.cursor = 'grabbing';
 
                 if (!this.dustCoverOpen) {
@@ -1895,14 +1995,15 @@ export class Turntable3D {
                     };
                 }
             }
-        });
+        };
 
-        const handlePointerRelease = (e) => {
+        this._onWindowPointerRelease = (e) => {
             if (this.introMode) return;
 
             if (this.isDraggingTonearm) {
                 this.isDraggingTonearm = false;
                 this.controls.enabled = true;
+                this._needsRender = true;
                 dom.style.cursor = this.isHoveringTonearm ? 'grab' : '';
                 if (hintEl) {
                     hintEl.classList.add('hidden');
@@ -1975,6 +2076,7 @@ export class Turntable3D {
                         this.cueTargetTrack = track;
                         this.mechState = 'CUE_TO_GROOVE';
                         this.targetRPM = AppState.rpmMode;
+                        this._needsRender = true;
                         if (!this.dustCoverOpen) this.dustCoverOpen = true;
                     }
                 }
@@ -1982,7 +2084,75 @@ export class Turntable3D {
             }
         };
 
-        window.addEventListener('pointerup', handlePointerRelease);
-        window.addEventListener('pointercancel', handlePointerRelease);
+        dom.addEventListener('pointermove', this._onDomPointerMove);
+        dom.addEventListener('pointerdown', this._onDomPointerDown);
+        window.addEventListener('pointerup', this._onWindowPointerRelease);
+        window.addEventListener('pointercancel', this._onWindowPointerRelease);
+    }
+
+    dispose() {
+        if (this._onWindowResize) {
+            window.removeEventListener('resize', this._onWindowResize);
+        }
+        if (this._onVisibilityChange) {
+            document.removeEventListener('visibilitychange', this._onVisibilityChange);
+        }
+        if (this._onWindowPointerRelease) {
+            window.removeEventListener('pointerup', this._onWindowPointerRelease);
+            window.removeEventListener('pointercancel', this._onWindowPointerRelease);
+        }
+        if (this.renderer && this.renderer.domElement) {
+            const dom = this.renderer.domElement;
+            if (this._onDomPointerMove) dom.removeEventListener('pointermove', this._onDomPointerMove);
+            if (this._onDomPointerDown) dom.removeEventListener('pointerdown', this._onDomPointerDown);
+            if (this._onCanvasCancelCamAnim) dom.removeEventListener('pointerdown', this._onCanvasCancelCamAnim);
+            if (this._onControlsActivity) dom.removeEventListener('wheel', this._onControlsActivity);
+        }
+        if (this.controls) {
+            this.controls.dispose();
+        }
+        if (this.scene) {
+            if (this.scene.environment) {
+                this.scene.environment.dispose();
+            }
+            const disposedGeos = new Set();
+            const disposedMats = new Set();
+            const disposedTexs = new Set();
+
+            const disposeMaterial = (mat) => {
+                if (!mat || disposedMats.has(mat)) return;
+                disposedMats.add(mat);
+                for (const val of Object.values(mat)) {
+                    if (val && val.isTexture && !disposedTexs.has(val)) {
+                        disposedTexs.add(val);
+                        val.dispose();
+                    }
+                }
+                mat.dispose();
+            };
+
+            this.scene.traverse(obj => {
+                if (obj.geometry && !disposedGeos.has(obj.geometry)) {
+                    disposedGeos.add(obj.geometry);
+                    obj.geometry.dispose();
+                }
+                if (obj.material) {
+                    if (Array.isArray(obj.material)) {
+                        obj.material.forEach(disposeMaterial);
+                    } else {
+                        disposeMaterial(obj.material);
+                    }
+                }
+            });
+        }
+        if (this.renderer) {
+            this.renderer.dispose();
+            if (this.renderer.domElement && this.renderer.domElement.parentNode) {
+                this.renderer.domElement.parentNode.removeChild(this.renderer.domElement);
+            }
+            this.renderer = null;
+        }
+        this._interactiveArmTargets = null;
+        this._baseVinylCanvas = null;
     }
 }
