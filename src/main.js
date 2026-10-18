@@ -1,7 +1,7 @@
 import './style.css';
 import { DEFAULT_SYNTH_TRACKS } from './constants.js';
 import { storageDB } from './db.js';
-import { AppState, getCurrentTrack, persistState, getViewedPlaylist } from './state.js';
+import { AppState, getCurrentTrack, persistState, getViewedPlaylist, updateTrackPathsOnFolderRename } from './state.js';
 import { audioEngine } from './audio.js';
 import { Turntable3D } from './turntable.js';
 import {
@@ -25,7 +25,8 @@ import {
     selectAndPlayTrack,
     isPlaceholderArt,
     cleanPlaylistTitle,
-    upgradeArtworkUrl
+    upgradeArtworkUrl,
+    handleAudioLoadError
 } from './ui.js';
 import { initDownloadManager } from './downloadManager.js';
 
@@ -62,7 +63,12 @@ async function hydrateLibrary() {
                 pl.name = cleaned;
                 libraryFixed = true;
                 if (typeof window !== 'undefined' && window.spindleDesktop?.renamePlaylistFolder) {
-                    window.spindleDesktop.renamePlaylistFolder({ oldName, newName: cleaned }).catch(() => {});
+                    try {
+                        const res = await window.spindleDesktop.renamePlaylistFolder({ oldName, newName: cleaned });
+                        if (res && res.oldPath && res.newPath) {
+                            updateTrackPathsOnFolderRename(res.oldPath, res.newPath);
+                        }
+                    } catch (_) {}
                 }
             }
         }
@@ -114,8 +120,11 @@ async function hydrateLibrary() {
         }
 
         if (libraryFixed) {
-            await persistState();
+            await persistState({ immediate: true });
         }
+
+        // Prune any orphaned IndexedDB audio blobs no longer referenced by tracksById
+        await storageDB.cleanupOrphanedBlobs(Object.keys(AppState.tracksById));
     } else {
         DEFAULT_SYNTH_TRACKS.forEach(t => {
             AppState.tracksById[t.id] = { ...t };
@@ -136,7 +145,7 @@ async function hydrateLibrary() {
                 trackIds: ['synth-2', 'synth-3']
             }
         ];
-        await persistState();
+        await persistState({ immediate: true });
     }
 
     AppState.playingPlaylistId = null;
@@ -145,6 +154,10 @@ async function hydrateLibrary() {
 }
 
 async function initApp() {
+    storageDB.onStorageError = (context, err) => {
+        console.error(`[Spindle Storage Error] ${context}:`, err);
+    };
+
     await hydrateLibrary();
     initDownloadManager();
 
@@ -159,6 +172,7 @@ async function initApp() {
         updatePlayerUI();
     };
     audioEngine.onEnded = () => handleTrackEnded();
+    audioEngine.onAudioError = (_err, track) => handleAudioLoadError(track);
 
     renderSidebarView();
     updatePlayerUI();

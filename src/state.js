@@ -41,8 +41,76 @@ export function getCurrentTrack() {
     return AppState.tracksById[tid] || null;
 }
 
-export async function persistState() {
-    await storageDB.saveMetadata(AppState.tracksById, AppState.playlists);
+let _saveTimer = null;
+let _saveInFlight = null;
+let _pendingFlushAfterInFlight = false;
+let _pendingResolvers = [];
+
+async function _flushPersistQueue() {
+    if (_saveTimer) {
+        clearTimeout(_saveTimer);
+        _saveTimer = null;
+    }
+
+    if (_saveInFlight) {
+        _pendingFlushAfterInFlight = true;
+        return _saveInFlight;
+    }
+
+    const resolvers = _pendingResolvers;
+    _pendingResolvers = [];
+
+    _saveInFlight = (async () => {
+        try {
+            return await storageDB.saveMetadata(AppState.tracksById, AppState.playlists);
+        } finally {
+            _saveInFlight = null;
+            if (_pendingFlushAfterInFlight || _pendingResolvers.length > 0) {
+                _pendingFlushAfterInFlight = false;
+                await _flushPersistQueue();
+            }
+        }
+    })();
+
+    const result = await _saveInFlight;
+    resolvers.forEach(r => r(result));
+    return result;
+}
+
+export function persistState({ immediate = false } = {}) {
+    if (immediate) {
+        return _flushPersistQueue();
+    }
+    return new Promise((resolve) => {
+        _pendingResolvers.push(resolve);
+        if (_saveTimer) clearTimeout(_saveTimer);
+        _saveTimer = setTimeout(() => {
+            _flushPersistQueue();
+        }, 120);
+    });
+}
+
+// Updates track.filePath and track.url whenever a playlist folder is renamed on disk
+export function updateTrackPathsOnFolderRename(oldFolderPath, newFolderPath) {
+    if (!oldFolderPath || !newFolderPath || oldFolderPath === newFolderPath) return false;
+    const normOld = oldFolderPath.replace(/[\\/]+$/, '');
+    const normNew = newFolderPath.replace(/[\\/]+$/, '');
+    let updated = false;
+
+    for (const track of Object.values(AppState.tracksById)) {
+        if (!track || !track.filePath) continue;
+        if (
+            track.filePath === normOld ||
+            track.filePath.startsWith(normOld + '/') ||
+            track.filePath.startsWith(normOld + '\\')
+        ) {
+            const suffix = track.filePath.slice(normOld.length);
+            track.filePath = normNew + suffix;
+            track.url = `spindle-media://local/${encodeURIComponent(track.filePath)}`;
+            updated = true;
+        }
+    }
+    return updated;
 }
 
 // Lightweight ID3v2 Title/Artist parser for local files

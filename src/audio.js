@@ -12,11 +12,13 @@ export class SoundEngine {
         this.onTimeUpdate = null;
         this.onLoadedMetadata = null;
         this.onEnded = null;
+        this.onAudioError = null;
 
         this.lastLiftTime = 0;
         this.lastDropTime = 0;
 
         this.pendingStartTime = 0;
+        this._suppressNativeEvents = false;
 
         if (this.htmlAudio) {
             this.bindAudioEvents();
@@ -24,11 +26,15 @@ export class SoundEngine {
     }
 
     setAudioElement(el) {
+        if (this.htmlAudio === el && el?._spindleBound) return;
         this.htmlAudio = el;
         this.bindAudioEvents();
     }
 
     bindAudioEvents() {
+        if (!this.htmlAudio || this.htmlAudio._spindleBound) return;
+        this.htmlAudio._spindleBound = true;
+
         this.htmlAudio.addEventListener('timeupdate', () => {
             const track = getCurrentTrack();
             if (track && !track.isSynth && !AppState.isSeeking) {
@@ -64,6 +70,16 @@ export class SoundEngine {
         this.htmlAudio.addEventListener('ended', () => {
             if (this.onEnded) this.onEnded();
         });
+
+        this.htmlAudio.addEventListener('error', () => {
+            if (this._suppressNativeEvents) return;
+            const track = getCurrentTrack();
+            if (track && !track.isSynth && AppState.hasActiveSession && this.htmlAudio.getAttribute('src')) {
+                const mediaErr = this.htmlAudio.error;
+                console.error('[SoundEngine] Media element error:', mediaErr?.code, mediaErr?.message, track.url);
+                if (this.onAudioError) this.onAudioError(track, mediaErr);
+            }
+        });
     }
 
     initContext() {
@@ -76,7 +92,7 @@ export class SoundEngine {
             this.setupVinylCrackle();
         }
         if (this.ctx.state === 'suspended') {
-            this.ctx.resume();
+            this.ctx.resume().catch(() => {});
         }
     }
 
@@ -120,6 +136,7 @@ export class SoundEngine {
     setVolume(val) {
         AppState.volume = val;
         if (this.htmlAudio) {
+            this.htmlAudio.muted = Boolean(AppState.isMuted);
             this.htmlAudio.volume = AppState.isMuted ? 0 : val;
         }
         if (this.masterGain && this.ctx) {
@@ -133,12 +150,22 @@ export class SoundEngine {
         this.stopAllAudioOnly();
 
         if (track.isSynth) {
-            if (this.htmlAudio) this.htmlAudio.pause();
+            if (this.htmlAudio) {
+                this._suppressNativeEvents = true;
+                this.htmlAudio.pause();
+                this._suppressNativeEvents = false;
+            }
             AppState.currentTime = startTime;
             AppState.duration = track.duration;
             this.startSynthSequencer(track.synthPreset);
         } else {
+            if (!track.url) {
+                console.error('[SoundEngine] Track is missing playable URL:', track);
+                if (this.onAudioError) this.onAudioError(track, new Error('Missing audio URL'));
+                return;
+            }
             if (this.htmlAudio) {
+                this._suppressNativeEvents = true;
                 const srcChanged = this.htmlAudio.src !== track.url;
                 if (srcChanged) {
                     this.htmlAudio.src = track.url;
@@ -149,8 +176,19 @@ export class SoundEngine {
                     } catch (_) {}
                     this.pendingStartTime = 0;
                 }
+                this.htmlAudio.muted = Boolean(AppState.isMuted);
                 this.htmlAudio.volume = AppState.isMuted ? 0 : AppState.volume;
-                this.htmlAudio.play().catch(() => {});
+                this._suppressNativeEvents = false;
+
+                const playPromise = this.htmlAudio.play();
+                if (playPromise && typeof playPromise.catch === 'function') {
+                    playPromise.catch((err) => {
+                        // Ignore AbortError caused by rapid track switching
+                        if (err && err.name === 'AbortError') return;
+                        console.error('[SoundEngine] Audio play() failed:', err, track.url);
+                        if (this.onAudioError) this.onAudioError(track, err);
+                    });
+                }
             }
         }
         this.updateCrackleLevel();
@@ -164,8 +202,10 @@ export class SoundEngine {
         }
         if (track.isSynth) {
             this.stopSynthSequencer();
-        } else {
-            if (this.htmlAudio) this.htmlAudio.pause();
+        } else if (this.htmlAudio) {
+            this._suppressNativeEvents = true;
+            this.htmlAudio.pause();
+            this._suppressNativeEvents = false;
         }
         this.updateCrackleLevel();
     }
@@ -175,7 +215,11 @@ export class SoundEngine {
             this.playNeedleLiftSound();
         }
         this.stopSynthSequencer();
-        if (this.htmlAudio) this.htmlAudio.pause();
+        if (this.htmlAudio) {
+            this._suppressNativeEvents = true;
+            this.htmlAudio.pause();
+            this._suppressNativeEvents = false;
+        }
         this.updateCrackleLevel();
     }
 

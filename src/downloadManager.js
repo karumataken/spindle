@@ -1,6 +1,6 @@
 import { VINYL_COLORS } from './constants.js';
-import { AppState, persistState } from './state.js';
-import { renderSidebarView, updatePlayerUI, isPlaceholderArt, cleanPlaylistTitle, upgradeArtworkUrl } from './ui.js';
+import { AppState, persistState, updateTrackPathsOnFolderRename } from './state.js';
+import { renderSidebarView, updatePlayerUI, isPlaceholderArt, cleanPlaylistTitle, upgradeArtworkUrl, showAlertModal } from './ui.js';
 
 let isInitialized = false;
 const activeJobs = new Map();
@@ -42,6 +42,12 @@ export function initDownloadManager() {
                         window.spindleDesktop.renamePlaylistFolder({
                             oldName,
                             newName: cleanedTitle
+                        }).then(res => {
+                            if (res && res.oldPath && res.newPath) {
+                                if (updateTrackPathsOnFolderRename(res.oldPath, res.newPath)) {
+                                    persistState();
+                                }
+                            }
                         }).catch(err => console.warn('Could not rename playlist folder on discovery:', err));
                     }
                 }
@@ -97,6 +103,12 @@ export function initDownloadManager() {
                         window.spindleDesktop.renamePlaylistFolder({
                             oldName,
                             newName: entry.title
+                        }).then(res => {
+                            if (res && res.oldPath && res.newPath) {
+                                if (updateTrackPathsOnFolderRename(res.oldPath, res.newPath)) {
+                                    persistState();
+                                }
+                            }
                         }).catch(err => console.warn('Could not rename single track folder on discovery:', err));
                     }
                 }
@@ -281,14 +293,14 @@ export function initDownloadManager() {
                 userMsg = `Download failed: ${error.slice(0, 150)}`;
             }
         }
-        alert(userMsg);
+        showAlertModal('Import Error', userMsg);
         activeJobs.delete(jobId);
     });
 }
 
 export function startBackgroundImport({ url, targetPlaylistId, playlistName, placeholderId = null }) {
     if (typeof window === 'undefined' || !window.spindleDesktop) {
-        alert('YouTube downloads are available in the Spindle desktop app.');
+        showAlertModal('Desktop Feature', 'YouTube downloads are available in the Spindle desktop app.');
         return;
     }
 

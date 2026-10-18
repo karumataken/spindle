@@ -1,6 +1,6 @@
 import { VINYL_COLORS } from './constants.js';
 import { storageDB } from './db.js';
-import { AppState, getPlayingPlaylist, getViewedPlaylist, getCurrentTrack, persistState, parseAudioTitleArtist } from './state.js';
+import { AppState, getPlayingPlaylist, getViewedPlaylist, getCurrentTrack, persistState, parseAudioTitleArtist, updateTrackPathsOnFolderRename } from './state.js';
 import { audioEngine } from './audio.js';
 import { startBackgroundImport } from './downloadManager.js';
 
@@ -35,7 +35,16 @@ export function escapeHtml(str) {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+export function sanitizeColor(color, fallback = '#C85A32') {
+    if (!color || typeof color !== 'string') return fallback;
+    const trimmed = color.trim();
+    if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) return trimmed;
+    if (/^(rgb|rgba|hsl|hsla)\([0-9.,%\s]+\)$/.test(trimmed)) return trimmed;
+    return fallback;
 }
 
 export function cleanPlaylistTitle(title) {
@@ -62,7 +71,7 @@ export function isPlaceholderArt(url) {
 }
 
 export function getHeroFallbackDiscHtml(pl) {
-    const color = (pl && pl.color) || '#C85A32';
+    const color = sanitizeColor(pl && pl.color, '#C85A32');
     return `
         <div class="w-20 h-20 sm:w-22 sm:h-22 rounded-full border-4 border-neutral-800 flex items-center justify-center" style="background: radial-gradient(circle, ${color} 0%, ${color} 28%, #141413 30%, #222 45%, #111 47%, #292929 65%, #111 70%, #1c1c1c 100%);">
             <div class="w-2.5 h-2.5 rounded-full bg-alabaster"></div>
@@ -127,7 +136,7 @@ export function updatePlayerUI() {
         if (artImg) artImg.className = 'hidden';
         if (coverDisc) {
             coverDisc.classList.remove('hidden');
-            const color = (playingPl && playingPl.color) || track.labelColor || '#C85A32';
+            const color = sanitizeColor((playingPl && playingPl.color) || track.labelColor, '#C85A32');
             coverDisc.style.background = `radial-gradient(circle, ${color} 0%, ${color} 28%, #141413 30%, #242424 46%, #111 48%, #292929 65%, #111 70%, #1c1c1c 100%)`;
             if (AppState.playbackState === 'PLAYING') {
                 coverDisc.classList.add('playing');
@@ -292,12 +301,13 @@ export function createPlaylistRow(pl) {
         }
     }
 
+    const plColor = sanitizeColor(pl.color, '#C85A32');
     const artworkHtml = rowArt
         ? `<div class="w-10 h-10 rounded-xl overflow-hidden shrink-0 relative border border-stone">
             <img src="${rowArt}" class="absolute inset-0 w-full h-full object-cover object-center block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.parentElement.style.display='none'; }">
            </div>`
         : `<div class="w-10 h-10 rounded-xl bg-espresso flex items-center justify-center shrink-0 relative border border-stone">
-            <div class="w-7 h-7 rounded-full flex items-center justify-center" style="background: radial-gradient(circle, ${pl.color || '#C85A32'} 0%, ${pl.color || '#C85A32'} 35%, #1E1B18 38%, #1E1B18 100%);">
+            <div class="w-7 h-7 rounded-full flex items-center justify-center" style="background: radial-gradient(circle, ${plColor} 0%, ${plColor} 35%, #1E1B18 38%, #1E1B18 100%);">
                 ${
                     isPlaying
                         ? `<div class="flex items-end gap-0.5 h-3">
@@ -357,6 +367,7 @@ export function createPlaylistRow(pl) {
 export function createSearchResultTrackRow(pl, track, idx) {
     const isSelected = AppState.hasActiveSession && (pl.id === AppState.playingPlaylistId && idx === AppState.currentIndex);
     const isPlaying = isSelected && AppState.playbackState === 'PLAYING';
+    const labelColor = sanitizeColor(track.labelColor, '#C85A32');
 
     const row = document.createElement('div');
     row.className = `group flex items-center justify-between px-3.5 py-2.5 rounded-2xl cursor-pointer transition-all border ${
@@ -367,7 +378,7 @@ export function createSearchResultTrackRow(pl, track, idx) {
 
     row.innerHTML = `
         <div class="flex items-center gap-3.5 min-w-0 flex-1">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 relative" style="background: radial-gradient(circle, ${track.labelColor} 0%, ${track.labelColor} 35%, #1E1B18 38%, #1E1B18 100%);">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 relative" style="background: radial-gradient(circle, ${labelColor} 0%, ${labelColor} 35%, #1E1B18 38%, #1E1B18 100%);">
                 ${
                     isPlaying
                         ? `<div class="flex items-end gap-0.5 h-3.5">
@@ -552,6 +563,7 @@ export function renderOpenedPlaylistTracks(pl) {
         const isDownloading = !!track.isDownloading;
         const isSelected = AppState.hasActiveSession && (pl.id === AppState.playingPlaylistId && idx === AppState.currentIndex);
         const isPlaying = isSelected && AppState.playbackState === 'PLAYING';
+        const labelColor = sanitizeColor(track.labelColor, '#C85A32');
 
         const row = document.createElement('div');
         row.dataset.index = idx;
@@ -580,7 +592,7 @@ export function renderOpenedPlaylistTracks(pl) {
                         : ''
                 }
 
-                <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 relative" style="background: radial-gradient(circle, ${track.labelColor} 0%, ${track.labelColor} 35%, #1E1B18 38%, #1E1B18 100%);">
+                <div class="w-8 h-8 rounded-full flex items-center justify-center shrink-0 relative" style="background: radial-gradient(circle, ${labelColor} 0%, ${labelColor} 35%, #1E1B18 38%, #1E1B18 100%);">
                     ${
                         isDownloading
                             ? `<div class="w-4 h-4 flex items-center justify-center text-alabaster">
@@ -1007,6 +1019,28 @@ export function closeModal() {
     modalBody.innerHTML = '';
 }
 
+export function showAlertModal(title, message) {
+    openModal(title, `
+        <div class="space-y-4">
+            <p class="text-sm text-espresso leading-relaxed">${escapeHtml(message)}</p>
+            <div class="pt-2 flex justify-end">
+                <button type="button" id="btn-close-alert" class="px-5 py-2 rounded-xl bg-espresso text-alabaster text-xs font-medium transition">OK</button>
+            </div>
+        </div>
+    `);
+    const btn = document.getElementById('btn-close-alert');
+    if (btn) btn.onclick = closeModal;
+}
+
+export function handleAudioLoadError(track) {
+    stopPlayback();
+    const title = track?.title ? `"${track.title}"` : 'This song';
+    showAlertModal(
+        'Playback Error',
+        `${title} could not be played. Its audio file may have been moved, renamed, or is unavailable.`
+    );
+}
+
 export function showCreatePlaylistModal() {
     const modalBody = document.getElementById('modal-body');
     let selectedColor = VINYL_COLORS[0].label;
@@ -1132,7 +1166,10 @@ export function showRenamePlaylistModal(playlist) {
             playlist.name = val;
             if (typeof window !== 'undefined' && window.spindleDesktop?.renamePlaylistFolder) {
                 try {
-                    await window.spindleDesktop.renamePlaylistFolder({ oldName, newName: val });
+                    const res = await window.spindleDesktop.renamePlaylistFolder({ oldName, newName: val });
+                    if (res && res.oldPath && res.newPath) {
+                        updateTrackPathsOnFolderRename(res.oldPath, res.newPath);
+                    }
                 } catch (err) {
                     console.warn('Failed to rename playlist folder on disk:', err);
                 }

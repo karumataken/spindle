@@ -2,19 +2,25 @@ const { app, BrowserWindow, ipcMain, protocol, net, shell } = require('electron'
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { spawn, execSync } = require('child_process');
-const { pathToFileURL } = require('url');
+const { spawn, execFileSync } = require('child_process');
 const { Readable } = require('stream');
+
+const ALLOWED_MEDIA_EXTENSIONS = new Set([
+    '.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus', '.webm',
+    '.jpg', '.jpeg', '.png', '.webp'
+]);
 
 function getMimeType(filePath) {
     const ext = path.extname(filePath).toLowerCase();
     switch (ext) {
         case '.mp3': return 'audio/mpeg';
         case '.wav': return 'audio/wav';
-        case '.ogg': return 'audio/ogg';
+        case '.ogg':
+        case '.opus': return 'audio/ogg';
         case '.flac': return 'audio/flac';
         case '.m4a':
         case '.aac': return 'audio/mp4';
+        case '.webm': return 'audio/webm';
         case '.jpg':
         case '.jpeg': return 'image/jpeg';
         case '.png': return 'image/png';
@@ -51,25 +57,99 @@ function getMusicDir() {
 }
 
 function sanitizeName(str) {
-    return (str || 'Track').replace(/[/\\?%*:|"<>]/g, '_').trim();
+    const cleaned = (str || 'Track')
+        .replace(/[/\\?%*:|"<>]/g, '_')
+        .replace(/\.+$/g, '')
+        .trim();
+    return cleaned || 'Track';
+}
+
+function isPathInsideMusicDir(targetPath) {
+    try {
+        const musicRoot = path.resolve(getMusicDir());
+        const resolved = path.resolve(targetPath);
+        const rel = path.relative(musicRoot, resolved);
+        return Boolean(rel && !rel.startsWith('..') && !path.isAbsolute(rel));
+    } catch (_) {
+        return false;
+    }
+}
+
+function decodeMediaUrlPath(rawUrl) {
+    let stripped = String(rawUrl || '').replace(/^spindle-media:\/\/local\/?/i, '');
+    const qIdx = stripped.indexOf('?');
+    if (qIdx !== -1) stripped = stripped.slice(0, qIdx);
+    let decoded = decodeURIComponent(stripped);
+
+    if (process.platform === 'win32' && /^\/[a-zA-Z]:[\\/]/.test(decoded)) {
+        decoded = decoded.slice(1);
+    } else if (process.platform !== 'win32' && decoded && !decoded.startsWith('/')) {
+        decoded = '/' + decoded;
+    }
+    return path.normalize(decoded);
+}
+
+function resolveAllowedMediaFile(requestedPath) {
+    if (!requestedPath) return null;
+    const ext = path.extname(requestedPath).toLowerCase();
+    if (!ALLOWED_MEDIA_EXTENSIONS.has(ext)) return null;
+
+    if (isPathInsideMusicDir(requestedPath) && fs.existsSync(requestedPath)) {
+        return path.resolve(requestedPath);
+    }
+
+    // Fallback: if a playlist folder inside ~/Music/Spindle was renamed, locate by filename inside ~/Music/Spindle
+    try {
+        const base = path.basename(requestedPath);
+        const musicDir = getMusicDir();
+        if (base && fs.existsSync(musicDir)) {
+            const directCandidate = path.join(musicDir, base);
+            if (isPathInsideMusicDir(directCandidate) && fs.existsSync(directCandidate)) {
+                return directCandidate;
+            }
+            const entries = fs.readdirSync(musicDir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.isDirectory()) {
+                    const candidate = path.join(musicDir, entry.name, base);
+                    if (isPathInsideMusicDir(candidate) && fs.existsSync(candidate)) {
+                        return candidate;
+                    }
+                }
+            }
+        }
+    } catch (_) {}
+
+    return null;
 }
 
 function findBinary(name) {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        throw new Error(`Invalid binary name: ${name}`);
+    }
+    const isWin = process.platform === 'win32';
+    const exeName = isWin && !name.endsWith('.exe') ? `${name}.exe` : name;
+
     try {
-        const out = execSync(`which ${name}`, { encoding: 'utf8' }).trim();
-        if (out && fs.existsSync(out)) return out;
+        const lookupCmd = isWin ? 'where.exe' : 'which';
+        const out = execFileSync(lookupCmd, [exeName], {
+            encoding: 'utf8',
+            timeout: 3000,
+            windowsHide: true
+        }).trim();
+        const firstLine = out.split(/\r?\n/)[0]?.trim();
+        if (firstLine && fs.existsSync(firstLine)) return firstLine;
     } catch (_) {}
 
     const commonPaths = [
-        `/usr/bin/${name}`,
-        `/usr/local/bin/${name}`,
-        path.join(os.homedir(), '.local', 'bin', name),
-        path.join(app.getAppPath(), 'bin', name)
+        `/usr/bin/${exeName}`,
+        `/usr/local/bin/${exeName}`,
+        path.join(os.homedir(), '.local', 'bin', exeName),
+        path.join(app.getAppPath(), 'bin', exeName)
     ];
     for (const p of commonPaths) {
         if (fs.existsSync(p)) return p;
     }
-    return name;
+    return exeName;
 }
 
 function createWindow() {
@@ -86,7 +166,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
-            sandbox: false,
+            sandbox: true,
             webSecurity: true
         }
     });
@@ -113,15 +193,22 @@ function createWindow() {
 app.whenReady().then(() => {
     protocol.handle('spindle-media', async (request) => {
         try {
-            // URL format: spindle-media://local/<absolute-path>
-            const urlPath = request.url.replace(/^spindle-media:\/\/local\//i, '');
-            const filePath = decodeURIComponent(urlPath);
+            const rawPath = decodeMediaUrlPath(request.url);
+            const ext = path.extname(rawPath).toLowerCase();
+            if (!ALLOWED_MEDIA_EXTENSIONS.has(ext) || !isPathInsideMusicDir(rawPath)) {
+                return new Response('Forbidden media path', { status: 403 });
+            }
 
-            if (!fs.existsSync(filePath)) {
+            const filePath = resolveAllowedMediaFile(rawPath);
+            if (!filePath || !fs.existsSync(filePath)) {
                 return new Response('File not found', { status: 404 });
             }
 
             const stat = fs.statSync(filePath);
+            if (!stat.isFile()) {
+                return new Response('Not a file', { status: 404 });
+            }
+
             const totalSize = stat.size;
             const mimeType = getMimeType(filePath);
             const rangeHeader = request.headers.get('range');
@@ -210,13 +297,21 @@ ipcMain.handle('spindle:check-tools', async () => {
 
     try {
         const yt = findBinary('yt-dlp');
-        ytdlpVersion = execSync(`"${yt}" --version`, { encoding: 'utf8' }).trim();
+        ytdlpVersion = execFileSync(yt, ['--version'], {
+            encoding: 'utf8',
+            timeout: 4000,
+            windowsHide: true
+        }).trim();
         hasYtdlp = true;
     } catch (_) {}
 
     try {
         const ff = findBinary('ffmpeg');
-        const ffOut = execSync(`"${ff}" -version`, { encoding: 'utf8' });
+        const ffOut = execFileSync(ff, ['-version'], {
+            encoding: 'utf8',
+            timeout: 4000,
+            windowsHide: true
+        });
         ffmpegVersion = ffOut.split('\n')[0].replace('ffmpeg version ', '').split(' ')[0];
         hasFfmpeg = true;
     } catch (_) {}
@@ -842,6 +937,10 @@ ipcMain.handle('spindle:rename-playlist-folder', async (_event, { oldName, newNa
         const oldPath = path.join(musicDir, sanitizeName(oldName));
         const newPath = path.join(musicDir, sanitizeName(newName));
 
+        if (!isPathInsideMusicDir(oldPath) || !isPathInsideMusicDir(newPath)) {
+            return { success: false, error: 'Invalid playlist path' };
+        }
+
         if (fs.existsSync(oldPath) && oldPath !== newPath) {
             if (!fs.existsSync(newPath)) {
                 fs.renameSync(oldPath, newPath);
@@ -857,7 +956,7 @@ ipcMain.handle('spindle:rename-playlist-folder', async (_event, { oldName, newNa
                 try { fs.rmdirSync(oldPath); } catch (_) {}
             }
         }
-        return { success: true, newPath };
+        return { success: true, oldPath, newPath };
     } catch (err) {
         console.error('Failed to rename playlist folder:', err);
         return { success: false, error: err.message };
@@ -870,6 +969,9 @@ ipcMain.handle('spindle:delete-playlist-folder', async (_event, folderName) => {
         if (!folderName) return { success: false, error: 'Folder name required' };
         const musicDir = getMusicDir();
         const target = path.join(musicDir, sanitizeName(folderName));
+        if (!isPathInsideMusicDir(target) || path.resolve(target) === path.resolve(musicDir)) {
+            return { success: false, error: 'Invalid target folder' };
+        }
         if (fs.existsSync(target)) {
             fs.rmSync(target, { recursive: true, force: true });
         }
@@ -883,7 +985,8 @@ ipcMain.handle('spindle:delete-playlist-folder', async (_event, folderName) => {
 // IPC Handler: Open local music folder in system file manager
 ipcMain.handle('spindle:open-music-folder', async (_event, subPath) => {
     const musicDir = getMusicDir();
-    const target = subPath ? path.join(musicDir, sanitizeName(subPath)) : musicDir;
+    const candidate = subPath ? path.join(musicDir, sanitizeName(subPath)) : musicDir;
+    const target = isPathInsideMusicDir(candidate) ? candidate : musicDir;
     if (fs.existsSync(target)) {
         await shell.openPath(target);
     } else {
