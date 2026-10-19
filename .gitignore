@@ -3,3 +3,6 @@ dist
 release
 .DS_Store
 *.local
+TODO.md
+todo.md
+todo*.md
