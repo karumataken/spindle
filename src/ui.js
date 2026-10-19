@@ -2,9 +2,10 @@ import { VINYL_COLORS } from './constants.js';
 import { storageDB } from './db.js';
 import { AppState, getPlayingPlaylist, getViewedPlaylist, getCurrentTrack, persistState, parseAudioTitleArtist, updateTrackPathsOnFolderRename } from './state.js';
 import { audioEngine } from './audio.js';
-import { startBackgroundImport } from './downloadManager.js';
+import { startBackgroundImport, cancelPlaylistImports } from './downloadManager.js';
 
 let turntable3D = null;
+let lastMediaSessionKey = '';
 
 export function setTurntable(instance) {
     turntable3D = instance;
@@ -12,6 +13,96 @@ export function setTurntable(instance) {
 
 export function getTurntable() {
     return turntable3D;
+}
+
+export function initMediaSession() {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const safeSetHandler = (action, handler) => {
+        try {
+            ms.setActionHandler(action, handler);
+        } catch (_) {}
+    };
+
+    safeSetHandler('play', () => {
+        if (AppState.playbackState !== 'PLAYING') togglePlayPause();
+    });
+    safeSetHandler('pause', () => {
+        if (AppState.playbackState === 'PLAYING') togglePlayPause();
+    });
+    safeSetHandler('stop', () => {
+        stopPlayback();
+    });
+    safeSetHandler('previoustrack', () => {
+        playPrevTrack();
+    });
+    safeSetHandler('nexttrack', () => {
+        playNextTrack();
+    });
+    safeSetHandler('seekto', (details) => {
+        if (details && typeof details.seekTime === 'number' && AppState.duration > 0) {
+            const target = Math.max(0, Math.min(AppState.duration, details.seekTime));
+            audioEngine.seek(target);
+            updatePlayerUI();
+        }
+    });
+    safeSetHandler('seekbackward', (details) => {
+        const offset = (details && details.seekOffset) || 5;
+        if (AppState.duration > 0) {
+            audioEngine.seek(Math.max(0, AppState.currentTime - offset));
+            updatePlayerUI();
+        }
+    });
+    safeSetHandler('seekforward', (details) => {
+        const offset = (details && details.seekOffset) || 5;
+        if (AppState.duration > 0) {
+            audioEngine.seek(Math.min(AppState.duration, AppState.currentTime + offset));
+            updatePlayerUI();
+        }
+    });
+}
+
+export function syncMediaSession(artworkUrl = null) {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+    const ms = navigator.mediaSession;
+    const track = getCurrentTrack();
+
+    if (!AppState.hasActiveSession || !track || AppState.playbackState === 'STOPPED') {
+        ms.playbackState = 'none';
+        return;
+    }
+
+    ms.playbackState = AppState.playbackState === 'PLAYING' ? 'playing' : 'paused';
+
+    const playingPl = getPlayingPlaylist();
+    const albumName = track.album || (playingPl ? playingPl.name : 'Spindle');
+    const metaKey = `${track.id}|${track.title}|${track.artist}|${albumName}|${artworkUrl || ''}`;
+
+    if (metaKey !== lastMediaSessionKey && typeof MediaMetadata !== 'undefined') {
+        lastMediaSessionKey = metaKey;
+        const artworkList = [];
+        if (artworkUrl && !artworkUrl.startsWith('spindle-media://')) {
+            artworkList.push({ src: artworkUrl, sizes: '512x512' });
+        }
+        try {
+            ms.metadata = new MediaMetadata({
+                title: track.title || 'Unknown Title',
+                artist: track.artist || 'Unknown Artist',
+                album: albumName,
+                artwork: artworkList
+            });
+        } catch (_) {}
+    }
+
+    if (typeof ms.setPositionState === 'function' && AppState.duration > 0 && Number.isFinite(AppState.duration)) {
+        try {
+            ms.setPositionState({
+                duration: Math.max(0, AppState.duration),
+                playbackRate: 1,
+                position: Math.max(0, Math.min(AppState.duration, AppState.currentTime || 0))
+            });
+        } catch (_) {}
+    }
 }
 
 export function formatTime(sec) {
@@ -97,6 +188,7 @@ export function updatePlayerUI() {
         if (statusLed) {
             statusLed.className = 'w-2.5 h-2.5 rounded-full bg-stone shadow-sm';
         }
+        syncMediaSession(null);
         return;
     }
 
@@ -204,6 +296,8 @@ export function updatePlayerUI() {
     } else {
         repeatOneBadge.classList.add('hidden');
     }
+
+    syncMediaSession(artworkUrl);
 }
 
 // Renders the Sidebar: either Playlists Overview OR Opened Playlist (Top Hero + Songs List)
@@ -273,6 +367,15 @@ export function renderSidebarView() {
     }
 }
 
+export function formatDownloadStatusLabel(pl) {
+    const status = pl?.downloadStatus;
+    if (!status) return 'Downloading...';
+    if (status.stage === 'converting') return 'Converting...';
+    if (status.stage === 'metadata') return 'Tagging...';
+    if (typeof status.percent === 'number') return `Downloading ${status.percent}%`;
+    return 'Downloading...';
+}
+
 export function createPlaylistRow(pl) {
     const isSelected = AppState.hasActiveSession && pl.id === AppState.playingPlaylistId;
     const isPlaying = isSelected && AppState.playbackState === 'PLAYING';
@@ -321,6 +424,7 @@ export function createPlaylistRow(pl) {
            </div>`;
 
     const hasDownloading = pl.isDownloading || pl.trackIds.some(id => AppState.tracksById[id]?.isDownloading);
+    const dlLabel = hasDownloading ? formatDownloadStatusLabel(pl) : '';
 
     row.innerHTML = `
         <div class="flex items-center gap-3.5 min-w-0 flex-1">
@@ -334,7 +438,7 @@ export function createPlaylistRow(pl) {
                     ${hasDownloading ? `
                         <span class="inline-flex items-center gap-1 font-mono text-[9px] text-terracotta bg-terracotta/10 px-1.5 py-0.5 rounded-full border border-terracotta/20 animate-pulse">
                             <span class="w-1.5 h-1.5 rounded-full bg-terracotta"></span>
-                            <span>Downloading...</span>
+                            <span>${escapeHtml(dlLabel)}</span>
                         </span>
                     ` : ''}
                 </div>
@@ -558,9 +662,19 @@ export function renderOpenedPlaylistTracks(pl) {
     }
 
     const isReorderActive = AppState.isReorderMode && !query;
+    let firstDownloadingShown = false;
 
     filteredEntries.forEach(({ track, idx }) => {
         const isDownloading = !!track.isDownloading;
+        let trackDlBadge = 'Downloading...';
+        if (isDownloading) {
+            if (!firstDownloadingShown) {
+                firstDownloadingShown = true;
+                trackDlBadge = formatDownloadStatusLabel(pl);
+            } else if (pl.downloadStatus) {
+                trackDlBadge = 'Queued...';
+            }
+        }
         const isSelected = AppState.hasActiveSession && (pl.id === AppState.playingPlaylistId && idx === AppState.currentIndex);
         const isPlaying = isSelected && AppState.playbackState === 'PLAYING';
         const labelColor = sanitizeColor(track.labelColor, '#C85A32');
@@ -622,7 +736,7 @@ export function renderOpenedPlaylistTracks(pl) {
             <div class="flex items-center gap-2 shrink-0 ml-2">
                 ${
                     isDownloading
-                        ? `<span class="font-mono text-[10px] text-terracotta tracking-wider uppercase font-medium animate-pulse">Downloading...</span>`
+                        ? `<span class="font-mono text-[10px] text-terracotta tracking-wider uppercase font-medium animate-pulse">${escapeHtml(trackDlBadge)}</span>`
                         : isReorderActive
                             ? `
                             <button class="btn-move-up p-1 rounded-lg bg-oatmeal hover:bg-stone text-espresso disabled:opacity-30 transition" ${idx === 0 ? 'disabled' : ''} title="Move Up">
@@ -773,6 +887,7 @@ export function positionContextMenu(triggerBtn) {
 
 export function openPlaylistContextMenu(triggerBtn, playlist) {
     const isDesktop = typeof window !== 'undefined' && !!window.spindleDesktop;
+    const hasDownloading = playlist.isDownloading || (Array.isArray(playlist.trackIds) && playlist.trackIds.some(id => AppState.tracksById[id]?.isDownloading));
     const contextMenuEl = document.getElementById('context-menu');
     contextMenuEl.innerHTML = `
         <button data-action="rename" class="w-full text-left px-3.5 py-2 hover:bg-oatmeal flex items-center gap-2.5 transition">
@@ -787,6 +902,11 @@ export function openPlaylistContextMenu(triggerBtn, playlist) {
                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
             </svg>
             <span>Show in File Manager</span>
+        </button>
+        ` : ''}
+        ${hasDownloading ? `
+        <button data-action="cancel-download" class="w-full text-left px-3.5 py-2 hover:bg-amber-500/10 text-amber-700 flex items-center gap-2.5 transition">
+            <span>Cancel Download</span>
         </button>
         ` : ''}
         <div class="my-1 border-t border-stone/40"></div>
@@ -808,6 +928,12 @@ export function openPlaylistContextMenu(triggerBtn, playlist) {
         contextMenuEl.querySelector('[data-action="open-folder"]').onclick = () => {
             closeContextMenu();
             window.spindleDesktop.openMusicFolder(playlist.name);
+        };
+    }
+    if (hasDownloading && contextMenuEl.querySelector('[data-action="cancel-download"]')) {
+        contextMenuEl.querySelector('[data-action="cancel-download"]').onclick = () => {
+            closeContextMenu();
+            cancelPlaylistImports(playlist.id);
         };
     }
     contextMenuEl.querySelector('[data-action="remove"]').onclick = () => {
@@ -916,6 +1042,9 @@ export async function removePlaylist(playlistId) {
 
     const pl = AppState.playlists[idx];
     const wasPlaying = (AppState.playingPlaylistId === playlistId);
+
+    // Cancel any active background imports targeting this playlist before deleting its folder
+    cancelPlaylistImports(playlistId);
 
     if (wasPlaying) {
         stopPlayback();
@@ -1679,12 +1808,18 @@ export async function handleLocalFiles(fileList, targetPlaylistId = null) {
             id,
             title: meta.title,
             artist: meta.artist,
+            album: meta.album || null,
+            artwork: meta.artwork || null,
             duration: 180,
             isSynth: false,
             url,
             labelColor: palette.label,
             accentColor: palette.accent
         };
+
+        if (meta.artwork && (!destPl.artwork || isPlaceholderArt(destPl.artwork))) {
+            destPl.artwork = meta.artwork;
+        }
 
         AppState.tracksById[id] = newTrack;
         destPl.trackIds.push(id);

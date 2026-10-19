@@ -507,6 +507,50 @@ ipcMain.handle('spindle:youtube-inspect', async (_event, url) => {
     });
 });
 
+// Track active import child processes for cancellation and clean app shutdown
+const activeImportJobs = new Map();
+
+function killJobProcesses(jobState) {
+    if (!jobState) return;
+    if (jobState.safetyTimer) {
+        clearTimeout(jobState.safetyTimer);
+        jobState.safetyTimer = null;
+    }
+    for (const key of ['inspectProc', 'dlProc', 'fbProc']) {
+        const proc = jobState[key];
+        if (proc && !proc.killed) {
+            try { proc.kill('SIGTERM'); } catch (_) {}
+        }
+        jobState[key] = null;
+    }
+}
+
+app.on('before-quit', () => {
+    for (const jobState of activeImportJobs.values()) {
+        jobState.cancelled = true;
+        killJobProcesses(jobState);
+    }
+    activeImportJobs.clear();
+});
+
+ipcMain.handle('spindle:cancel-import', async (_event, jobId) => {
+    const jobState = activeImportJobs.get(jobId);
+    if (!jobState) return { cancelled: false };
+    jobState.cancelled = true;
+    killJobProcesses(jobState);
+    activeImportJobs.delete(jobId);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('spindle:import-completed', {
+            jobId,
+            targetPlaylistId: jobState.targetPlaylistId,
+            cancelled: true,
+            success: false,
+            count: 0
+        });
+    }
+    return { cancelled: true };
+});
+
 // IPC Handler: Start Background Download (Fire-and-Forget, streaming per-track completions)
 ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName, targetPlaylistId }) => {
     if (!url || typeof url !== 'string') {
@@ -525,14 +569,29 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
         }
     };
 
+    const jobState = {
+        jobId,
+        targetPlaylistId,
+        inspectProc: null,
+        dlProc: null,
+        fbProc: null,
+        safetyTimer: null,
+        cancelled: false
+    };
+    activeImportJobs.set(jobId, jobState);
+
     let resolvedPlaylistName = playlistName;
     let plFolder = null;
     let dlProcStarted = false;
     let discoveredEntries = [];
 
     const startDownload = (folderPath, expectedEntries = []) => {
-        if (dlProcStarted) return;
+        if (dlProcStarted || jobState.cancelled) return;
         dlProcStarted = true;
+        if (jobState.safetyTimer) {
+            clearTimeout(jobState.safetyTimer);
+            jobState.safetyTimer = null;
+        }
 
         if (!fs.existsSync(folderPath)) {
             fs.mkdirSync(folderPath, { recursive: true });
@@ -557,10 +616,12 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
         dlArgs.push(url.trim());
 
         const dlProc = spawn(ytBin, dlArgs);
+        jobState.dlProc = dlProc;
         let dlStderr = '';
         const completedTracks = [];
 
         dlProc.stdout.on('data', (d) => {
+            if (jobState.cancelled) return;
             const text = d.toString();
             const lines = text.split('\n');
             for (const line of lines) {
@@ -634,6 +695,12 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
         dlProc.stderr.on('data', d => { dlStderr += d.toString(); });
 
         dlProc.on('close', async (code) => {
+            jobState.dlProc = null;
+            if (jobState.cancelled) {
+                activeImportJobs.delete(jobId);
+                return;
+            }
+
             // Fallback: If no SPINDLE_READY lines were captured (or partial download), inspect folder for new mp3s
             if (completedTracks.length === 0 && fs.existsSync(folderPath)) {
                 const files = fs.readdirSync(folderPath)
@@ -680,7 +747,7 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                 return true;
             });
 
-            if (missingEntries.length > 0) {
+            if (missingEntries.length > 0 && !jobState.cancelled) {
                 sendToWindow('spindle:import-progress', {
                     jobId,
                     targetPlaylistId,
@@ -689,6 +756,7 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                 });
 
                 for (let i = 0; i < missingEntries.length; i++) {
+                    if (jobState.cancelled) break;
                     const item = missingEntries[i];
                     const cleanTit = (item.title || 'Track').trim();
                     const cleanArt = cleanArtist(item.artist);
@@ -726,9 +794,15 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                     try {
                         await new Promise((resolve) => {
                             const fbProc = spawn(ytBin, fallbackArgs);
+                            jobState.fbProc = fbProc;
                             let fbOut = '';
                             fbProc.stdout.on('data', d => { fbOut += d.toString(); });
                             fbProc.on('close', () => {
+                                jobState.fbProc = null;
+                                if (jobState.cancelled) {
+                                    resolve();
+                                    return;
+                                }
                                 const fbLines = fbOut.split('\n');
                                 for (const l of fbLines) {
                                     const trimmedLine = l.trim();
@@ -767,14 +841,24 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                 }
             }
 
+            if (jobState.cancelled) {
+                activeImportJobs.delete(jobId);
+                return;
+            }
+
             if (code === 0 || completedTracks.length > 0) {
+                let renamedFrom = null;
+                let renamedTo = null;
                 if (resolvedPlaylistName && plFolder) {
                     const targetDir = path.join(musicDir, sanitizeName(resolvedPlaylistName));
                     if (plFolder !== targetDir && fs.existsSync(plFolder)) {
+                        const oldFolder = plFolder;
                         try {
                             if (!fs.existsSync(targetDir)) {
                                 fs.renameSync(plFolder, targetDir);
                                 plFolder = targetDir;
+                                renamedFrom = oldFolder;
+                                renamedTo = targetDir;
                             } else {
                                 const files = fs.readdirSync(plFolder);
                                 for (const f of files) {
@@ -784,6 +868,8 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                                 }
                                 try { fs.rmdirSync(plFolder); } catch (_) {}
                                 plFolder = targetDir;
+                                renamedFrom = oldFolder;
+                                renamedTo = targetDir;
                             }
                         } catch (err) {
                             console.warn('Could not rename import folder at completion:', err);
@@ -795,7 +881,9 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                     jobId,
                     targetPlaylistId,
                     success: true,
-                    count: completedTracks.length
+                    count: completedTracks.length,
+                    renamedFrom,
+                    renamedTo
                 });
             } else {
                 sendToWindow('spindle:import-error', {
@@ -804,6 +892,7 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                     error: dlStderr || `yt-dlp exited with code ${code}`
                 });
             }
+            activeImportJobs.delete(jobId);
         });
     };
 
@@ -819,10 +908,13 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
     inspectArgs.push(url.trim());
 
     const inspectProc = spawn(ytBin, inspectArgs);
+    jobState.inspectProc = inspectProc;
 
     let inspectStdout = '';
     inspectProc.stdout.on('data', d => { inspectStdout += d.toString(); });
     inspectProc.on('close', code => {
+        jobState.inspectProc = null;
+        if (jobState.cancelled) return;
         if (code === 0) {
             try {
                 const data = JSON.parse(inspectStdout);
@@ -918,8 +1010,9 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
     });
 
     // Safety timeout: If inspection hangs longer than 15 seconds, start downloading to fallback folder
-    setTimeout(() => {
-        if (!dlProcStarted) {
+    jobState.safetyTimer = setTimeout(() => {
+        jobState.safetyTimer = null;
+        if (!dlProcStarted && !jobState.cancelled) {
             plFolder = path.join(musicDir, sanitizeName(playlistName || 'Downloads'));
             startDownload(plFolder, discoveredEntries);
         }

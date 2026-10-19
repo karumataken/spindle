@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('spindleDesktop', {
     checkTools: () => ipcRenderer.invoke('spindle:check-tools'),
     inspectYoutube: (url) => ipcRenderer.invoke('spindle:youtube-inspect', url),
     startImport: (params) => ipcRenderer.invoke('spindle:start-import', params),
+    cancelImport: (jobId) => ipcRenderer.invoke('spindle:cancel-import', jobId),
     onImportDiscovered: (callback) => {
         const handler = (_event, data) => callback(data);
         ipcRenderer.on('spindle:import-discovered', handler);

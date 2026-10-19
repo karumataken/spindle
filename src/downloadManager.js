@@ -237,6 +237,9 @@ export function initDownloadManager() {
         const hasPending = targetPl.trackIds.some(id => AppState.tracksById[id]?.isDownloading);
         if (!hasPending) {
             targetPl.isDownloading = false;
+            delete targetPl.downloadStatus;
+        } else if (targetPl.downloadStatus) {
+            targetPl.downloadStatus = { stage: 'downloading', percent: null, message: 'Downloading next track...' };
         }
 
         persistState();
@@ -244,9 +247,33 @@ export function initDownloadManager() {
         updatePlayerUI();
     });
 
+    // 2b. Live download / conversion progress
+    let lastProgressRender = 0;
+    const offProgress = window.spindleDesktop.onImportProgress
+        ? window.spindleDesktop.onImportProgress((data) => {
+            const { targetPlaylistId, percent, stage, message } = data || {};
+            const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
+            if (!targetPl) return;
+            targetPl.isDownloading = true;
+            targetPl.downloadStatus = {
+                percent: typeof percent === 'number' && Number.isFinite(percent) ? Math.round(percent) : null,
+                stage: stage || 'downloading',
+                message: message || 'Downloading...'
+            };
+            const now = Date.now();
+            if (now - lastProgressRender > 250 || stage === 'converting' || stage === 'metadata') {
+                lastProgressRender = now;
+                renderSidebarView();
+            }
+        })
+        : null;
+
     // 3. Batch download completed
     const offCompleted = window.spindleDesktop.onImportCompleted((data) => {
-        const { jobId, targetPlaylistId } = data;
+        const { jobId, targetPlaylistId, renamedFrom, renamedTo } = data;
+        if (renamedFrom && renamedTo) {
+            updateTrackPathsOnFolderRename(renamedFrom, renamedTo);
+        }
         const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
         if (targetPl) {
             // Remove any leftover downloading placeholders that never completed
@@ -259,6 +286,7 @@ export function initDownloadManager() {
                 return true;
             });
             targetPl.isDownloading = false;
+            delete targetPl.downloadStatus;
             persistState();
             renderSidebarView();
             updatePlayerUI();
@@ -281,6 +309,7 @@ export function initDownloadManager() {
                 return true;
             });
             targetPl.isDownloading = false;
+            delete targetPl.downloadStatus;
             persistState();
             renderSidebarView();
         }
@@ -298,7 +327,38 @@ export function initDownloadManager() {
         activeJobs.delete(jobId);
     });
 
-    unsubscribeFns = [offDiscovered, offTrackReady, offCompleted, offError].filter(fn => typeof fn === 'function');
+    unsubscribeFns = [offDiscovered, offTrackReady, offProgress, offCompleted, offError].filter(fn => typeof fn === 'function');
+}
+
+export function cancelPlaylistImports(playlistId) {
+    if (!playlistId) return false;
+    let cancelledAny = false;
+    for (const [jobId, job] of activeJobs.entries()) {
+        if (job.targetPlaylistId === playlistId) {
+            cancelledAny = true;
+            if (typeof window !== 'undefined' && window.spindleDesktop?.cancelImport) {
+                window.spindleDesktop.cancelImport(jobId).catch(() => {});
+            }
+            activeJobs.delete(jobId);
+        }
+    }
+    const targetPl = AppState.playlists.find(p => p.id === playlistId);
+    if (targetPl) {
+        targetPl.trackIds = targetPl.trackIds.filter(id => {
+            const t = AppState.tracksById[id];
+            if (t && t.isDownloading && !t.url) {
+                delete AppState.tracksById[id];
+                return false;
+            }
+            return true;
+        });
+        targetPl.isDownloading = false;
+        delete targetPl.downloadStatus;
+        persistState();
+        renderSidebarView();
+        updatePlayerUI();
+    }
+    return cancelledAny;
 }
 
 export function cleanupDownloadManager() {

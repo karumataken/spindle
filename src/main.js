@@ -26,7 +26,8 @@ import {
     isPlaceholderArt,
     cleanPlaylistTitle,
     upgradeArtworkUrl,
-    handleAudioLoadError
+    handleAudioLoadError,
+    initMediaSession
 } from './ui.js';
 import { initDownloadManager, cleanupDownloadManager } from './downloadManager.js';
 
@@ -160,6 +161,7 @@ async function initApp() {
 
     await hydrateLibrary();
     initDownloadManager();
+    initMediaSession();
 
     const turntableInstance = new Turntable3D('canvas-container');
     setTurntable(turntableInstance);
@@ -283,19 +285,70 @@ async function initApp() {
         });
     }
 
-    // Global Space bar shortcut to toggle play/pause on currently playing track
+    // Global keyboard media shortcuts (Space, Arrow keys, M)
     window.addEventListener('keydown', (e) => {
+        if (isIntroActive) return; // onIntroKey handles intro transition
+
+        const activeEl = document.activeElement;
+        const tagName = activeEl ? activeEl.tagName.toUpperCase() : '';
+        if (tagName === 'INPUT' || tagName === 'TEXTAREA' || activeEl?.isContentEditable) {
+            return; // Let user type normally into inputs
+        }
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+
         if (e.code === 'Space' || e.key === ' ') {
-            if (isIntroActive) return; // onIntroKey handles intro transition
-
-            const activeEl = document.activeElement;
-            const tagName = activeEl ? activeEl.tagName.toUpperCase() : '';
-            if (tagName === 'INPUT' || tagName === 'TEXTAREA' || activeEl?.isContentEditable) {
-                return; // Let user type spaces into text boxes
-            }
-
-            e.preventDefault(); // Stop native button activation and scrolling
+            e.preventDefault();
             togglePlayPause();
+            return;
+        }
+
+        if (e.key === 'ArrowLeft') {
+            if (!AppState.hasActiveSession) return;
+            e.preventDefault();
+            if (e.shiftKey) {
+                playPrevTrack();
+            } else if (AppState.duration > 0) {
+                audioEngine.seek(Math.max(0, AppState.currentTime - 5));
+                updatePlayerUI();
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowRight') {
+            if (!AppState.hasActiveSession) return;
+            e.preventDefault();
+            if (e.shiftKey) {
+                playNextTrack();
+            } else if (AppState.duration > 0) {
+                audioEngine.seek(Math.min(AppState.duration, AppState.currentTime + 5));
+                updatePlayerUI();
+            }
+            return;
+        }
+
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            if (!AppState.hasActiveSession) return;
+            e.preventDefault();
+            const delta = e.key === 'ArrowUp' ? 0.05 : -0.05;
+            const nextVol = Math.round(Math.max(0, Math.min(1, AppState.volume + delta)) * 100) / 100;
+            AppState.isMuted = nextVol === 0;
+            audioEngine.setVolume(nextVol);
+            const volSliderEl = document.getElementById('vol-slider');
+            const volFillEl = document.getElementById('vol-fill');
+            if (volSliderEl) volSliderEl.value = String(nextVol);
+            if (volFillEl) volFillEl.style.width = `${nextVol * 100}%`;
+            return;
+        }
+
+        if (e.key === 'm' || e.key === 'M') {
+            if (!AppState.hasActiveSession) return;
+            e.preventDefault();
+            AppState.isMuted = !AppState.isMuted;
+            audioEngine.setVolume(AppState.volume);
+            const volFillEl = document.getElementById('vol-fill');
+            if (volFillEl) {
+                volFillEl.style.width = AppState.isMuted ? '0%' : `${AppState.volume * 100}%`;
+            }
         }
     });
 
