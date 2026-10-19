@@ -166,6 +166,10 @@ body.dark-theme .hover\:bg-alabaster\/60:hover {
 body.dark-theme #spindle-logo-text {
     fill: #DDD7CE;
 }
+#btn-about-app:hover #spindle-logo-text,
+body.dark-theme #btn-about-app:hover #spindle-logo-text {
+    fill: #C85A32 !important;
+}
 body.dark-theme #viewport-main {
     background: radial-gradient(circle at center, #2E2925 0%, #231F1C 62%, #1B1815 100%) !important;
 }

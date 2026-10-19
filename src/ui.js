@@ -2053,20 +2053,16 @@ export async function showAboutModal() {
     openModal('About Spindle', `
         <div class="space-y-4 text-center py-2">
             <div class="flex justify-center mb-1">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 185 48" class="h-12 w-auto">
-                    <text x="4" y="36" font-family="'Caveat', cursive" font-weight="600" font-size="44" fill="#C85A32">Spindle</text>
-                    <circle cx="57" cy="12" r="2.5" fill="#1E1B18"/>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 102 46" class="h-12 w-auto">
+                    <text x="2" y="35" font-family="'Caveat', cursive" font-weight="600" font-size="42" fill="#C85A32">Spindle</text>
+                    <circle cx="45" cy="15" r="3.2" fill="#1E1B18"/>
                 </svg>
             </div>
             <div>
                 <p class="font-serif text-base font-semibold text-espresso">Spindle Music Player</p>
                 <p class="font-mono text-xs text-muted mt-0.5">Version ${escapeHtml(currentVer)}</p>
             </div>
-            <div class="p-3.5 rounded-2xl bg-oatmeal/60 border border-stone/80 text-xs text-espresso text-left space-y-1.5 leading-relaxed">
-                <p class="font-medium text-espresso">Tactile, analog-inspired retro turntable & offline music player.</p>
-                <p class="text-muted">An experimental project vibe-coded with Gemini. Feedback, ideas, and suggestions are always welcome!</p>
-            </div>
-            <div class="space-y-2 pt-1">
+            <div class="space-y-2 pt-2">
                 <button type="button" id="btn-manual-check-updates" class="w-full py-2 rounded-xl bg-alabaster border border-stone hover:border-terracotta hover:bg-oatmeal text-espresso text-xs font-mono font-medium transition flex items-center justify-center gap-2">
                     <span id="check-update-spinner" class="hidden w-3 h-3 border-2 border-terracotta border-t-transparent rounded-full animate-spin"></span>
                     <span id="check-update-label">Check for Updates</span>

@@ -129,7 +129,29 @@ function findBinary(name) {
     }
     const isWin = process.platform === 'win32';
     const exeName = isWin && !name.endsWith('.exe') ? `${name}.exe` : name;
+    const platformFolder = isWin ? 'win' : 'linux';
 
+    // 1. Check bundled extraResources directory (packaged app: <appDir>/resources/bin/<exeName>)
+    try {
+        if (process.resourcesPath) {
+            const bundledPath = path.join(process.resourcesPath, 'bin', exeName);
+            if (fs.existsSync(bundledPath)) {
+                try { fs.chmodSync(bundledPath, 0o755); } catch (_) {}
+                return bundledPath;
+            }
+        }
+    } catch (_) {}
+
+    // 2. Check local dev bin directory (bin/win or bin/linux)
+    try {
+        const localDevPath = path.join(__dirname, '..', 'bin', platformFolder, exeName);
+        if (fs.existsSync(localDevPath)) {
+            try { fs.chmodSync(localDevPath, 0o755); } catch (_) {}
+            return localDevPath;
+        }
+    } catch (_) {}
+
+    // 3. Fallback to system lookup (which/where.exe)
     try {
         const lookupCmd = isWin ? 'where.exe' : 'which';
         const out = execFileSync(lookupCmd, [exeName], {
@@ -141,6 +163,7 @@ function findBinary(name) {
         if (firstLine && fs.existsSync(firstLine)) return firstLine;
     } catch (_) {}
 
+    // 4. Fallback to standard locations
     const commonPaths = [
         `/usr/bin/${exeName}`,
         `/usr/local/bin/${exeName}`,
