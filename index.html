@@ -57,6 +57,135 @@
                 margin-left: -510px !important;
             }
         }
+
+        /* Upright 3D Coin-Spinning Vinyl Loading Screen */
+        :root {
+            --vinyl-size: 68px;
+            --vinyl-label-color: #C85A32;
+        }
+        .loader-overlay {
+            position: fixed;
+            top: 28px; /* sits right below the thin title bar */
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #F6F4F0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 18px;
+            z-index: 50;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                        visibility 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            user-select: none;
+            pointer-events: all;
+        }
+        body.dark-theme .loader-overlay {
+            background-color: #211E1B;
+        }
+        .loader-overlay.is-hidden {
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+        .vinyl-scene {
+            position: relative;
+            width: var(--vinyl-size);
+            height: var(--vinyl-size);
+            perspective: 550px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .vinyl-coin-pivot {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: coin-spin 1.35s linear infinite;
+        }
+        .vinyl-disc,
+        .vinyl-edge {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            transform: translateZ(var(--z));
+            -webkit-mask-image: radial-gradient(circle, transparent 6.5%, #000 7.5%);
+            mask-image: radial-gradient(circle, transparent 6.5%, #000 7.5%);
+        }
+        .vinyl-edge {
+            background: #11100F;
+            box-shadow: inset 0 0 0 1px #2C2825;
+        }
+        .vinyl-face {
+            background:
+                conic-gradient(
+                    from 45deg,
+                    transparent 0deg,
+                    rgba(255, 255, 255, 0.16) 22deg,
+                    transparent 45deg,
+                    transparent 180deg,
+                    rgba(255, 255, 255, 0.16) 202deg,
+                    transparent 225deg
+                ),
+                radial-gradient(
+                    circle,
+                    #181513 0%,
+                    #181513 9%,
+                    var(--vinyl-label-color) 9.5%,
+                    #A04322 29%,
+                    #12100E 30%,
+                    transparent 31%
+                ),
+                repeating-radial-gradient(
+                    circle,
+                    #181614 0px,
+                    #181614 1.5px,
+                    #24211E 2px,
+                    #181614 3px
+                );
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+        }
+        .vinyl-floor-shadow {
+            position: absolute;
+            bottom: -15px;
+            width: 65%;
+            height: 7px;
+            background: radial-gradient(ellipse at center, rgba(30, 27, 24, 0.45) 0%, transparent 75%);
+            border-radius: 50%;
+            animation: shadow-pulse 1.35s ease-in-out infinite;
+        }
+        body.dark-theme .vinyl-floor-shadow {
+            background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.75) 0%, transparent 75%);
+        }
+        @keyframes coin-spin {
+            0% {
+                transform: rotateX(14deg) rotateY(0deg) rotateZ(0deg);
+            }
+            50% {
+                transform: rotateX(-14deg) rotateY(180deg) rotateZ(180deg);
+            }
+            100% {
+                transform: rotateX(14deg) rotateY(360deg) rotateZ(360deg);
+            }
+        }
+        @keyframes shadow-pulse {
+            0%, 100% {
+                transform: scaleX(0.95);
+                opacity: 0.65;
+            }
+            25%, 75% {
+                transform: scaleX(0.35);
+                opacity: 0.35;
+            }
+            50% {
+                transform: scaleX(0.95);
+                opacity: 0.65;
+            }
+        }
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col overflow-hidden select-none bg-alabaster">
@@ -81,6 +210,22 @@
                     <line x1="8" y1="2" x2="2" y2="8"/>
                 </svg>
             </button>
+        </div>
+    </div>
+
+    <!-- 3D ROTATING VINYL LOADING SCREEN -->
+    <div id="app-loader" class="loader-overlay" aria-label="Loading Spindle">
+        <div class="vinyl-scene">
+            <div class="vinyl-coin-pivot">
+                <!-- 3D Thickness Layers (Back to Front) -->
+                <div class="vinyl-disc vinyl-face" style="--z: -2px"></div>
+                <div class="vinyl-edge" style="--z: -1px"></div>
+                <div class="vinyl-edge" style="--z: 0px"></div>
+                <div class="vinyl-edge" style="--z: 1px"></div>
+                <div class="vinyl-disc vinyl-face" style="--z: 2px"></div>
+            </div>
+            <!-- Subtle surface shadow underneath the spinning vinyl -->
+            <div class="vinyl-floor-shadow"></div>
         </div>
     </div>
 

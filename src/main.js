@@ -174,10 +174,13 @@ async function initApp() {
     const sidebarPanel = document.getElementById('sidebar-panel');
     const hudTop = document.getElementById('hud-top');
     const hudBottom = document.getElementById('hud-bottom-hint');
+    const appLoader = document.getElementById('app-loader');
 
     let isIntroActive = true;
+    let isLoaderDismissed = false;
+
     function handleIntroOpen() {
-        if (!isIntroActive) return;
+        if (!isIntroActive || !isLoaderDismissed) return;
         isIntroActive = false;
 
         // 1. Fade out intro prompt & disable click catcher immediately
@@ -218,17 +221,46 @@ async function initApp() {
     }
 
     function onIntroKey(e) {
+        if (!isLoaderDismissed) return;
         if (e.key === ' ' || e.key === 'Enter') {
             e.preventDefault();
             handleIntroOpen();
         }
     }
 
-    if (introOverlay) {
-        introOverlay.addEventListener('click', handleIntroOpen);
+    // Dismiss 3D vinyl loader after turntable is rendered and minimum 1.35s spin completes
+    const dismissLoader = () => {
+        if (!appLoader) {
+            isLoaderDismissed = true;
+            bindIntroEvents();
+            return;
+        }
+
+        // Ensure 3D scene paints its first frame behind the loader
+        const tt = getTurntable();
+        if (tt) tt.update();
+
+        // 1.4s display allows the 3D coin-toss vinyl to complete its spin cycle smoothly
+        setTimeout(() => {
+            appLoader.classList.add('is-hidden');
+            isLoaderDismissed = true;
+            bindIntroEvents();
+
+            appLoader.addEventListener('transitionend', () => {
+                appLoader.remove();
+            }, { once: true });
+        }, 1400);
+    };
+
+    function bindIntroEvents() {
+        if (introOverlay) {
+            introOverlay.addEventListener('click', handleIntroOpen);
+        }
+        window.addEventListener('click', handleIntroOpen, { capture: true, once: true });
+        window.addEventListener('keydown', onIntroKey);
     }
-    window.addEventListener('click', handleIntroOpen, { capture: true, once: true });
-    window.addEventListener('keydown', onIntroKey);
+
+    dismissLoader();
 
     window.addEventListener('click', () => closeContextMenu());
 
