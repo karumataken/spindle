@@ -871,14 +871,18 @@ export class Turntable3D {
         spindleCollar.position.y = 0.096;
         this.platterGroup.add(spindleCollar);
 
-        const spindleShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.040, 0.34, 24), chromeMat);
-        spindleShaft.position.y = 0.18;
+        const spindleShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.036, 0.038, 0.12, 32), chromeMat);
+        spindleShaft.position.y = 0.15;
         spindleShaft.castShadow = true;
         this.platterGroup.add(spindleShaft);
 
-        const spindleTip = new THREE.Mesh(new THREE.ConeGeometry(0.036, 0.05, 24), chromeMat);
-        spindleTip.position.y = 0.375;
-        this.platterGroup.add(spindleTip);
+        const spindleDome = new THREE.Mesh(
+            new THREE.SphereGeometry(0.036, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+            chromeMat
+        );
+        spindleDome.position.y = 0.21;
+        spindleDome.castShadow = true;
+        this.platterGroup.add(spindleDome);
 
         // 4. Vinyl Record Disc with Clearcoat Groove Sheen & Raised Center Label
         this.recordGroup = new THREE.Group();
