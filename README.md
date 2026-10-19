@@ -21,7 +21,7 @@
 
 ### 📦 Downloads
 
-Pre-built releases for **Linux** (`.AppImage`, `.rpm`) and **Windows** (`.exe`) are available directly on the [**Releases Page**](https://github.com/karumataken/spindle/releases).
+Pre-built releases for **Linux** (`.AppImage`, `.deb`, `.rpm`) and **Windows** (`.exe`) are available directly on the [**Releases Page**](https://github.com/karumataken/spindle/releases).
 
 ---
 
