@@ -152,8 +152,53 @@ async function initApp() {
     initUpdateChecker();
     initMediaSession();
 
+    // Theme Management with Persistence
+    const applyThemeState = (isDark, { persist = false } = {}) => {
+        AppState.isDarkMode = Boolean(isDark);
+        document.documentElement.classList.toggle('dark-theme', AppState.isDarkMode);
+        document.body.classList.toggle('dark-theme', AppState.isDarkMode);
+
+        const thumb = document.getElementById('theme-toggle-thumb');
+        const lightLbl = document.getElementById('theme-label-light');
+        const darkLbl = document.getElementById('theme-label-dark');
+
+        if (thumb) thumb.style.transform = AppState.isDarkMode ? 'translateX(32px)' : 'translateX(0px)';
+        if (lightLbl) {
+            lightLbl.className = AppState.isDarkMode
+                ? 'w-6 h-6 flex items-center justify-center text-muted transition-colors duration-300'
+                : 'w-6 h-6 flex items-center justify-center text-alabaster transition-colors duration-300';
+        }
+        if (darkLbl) {
+            darkLbl.className = AppState.isDarkMode
+                ? 'w-6 h-6 flex items-center justify-center text-alabaster transition-colors duration-300'
+                : 'w-6 h-6 flex items-center justify-center text-muted transition-colors duration-300';
+        }
+
+        const currentTurntable = getTurntable();
+        if (currentTurntable) {
+            currentTurntable.setTheme(AppState.isDarkMode);
+        }
+
+        if (persist) {
+            try {
+                localStorage.setItem('spindle:theme', AppState.isDarkMode ? 'dark' : 'light');
+            } catch (_) {}
+        }
+    };
+
+    let initialDark = false;
+    try {
+        const savedTheme = localStorage.getItem('spindle:theme');
+        if (savedTheme) {
+            initialDark = savedTheme === 'dark';
+        }
+    } catch (_) {}
+
     const turntableInstance = new Turntable3D('canvas-container');
     setTurntable(turntableInstance);
+
+    // Apply preserved theme to DOM and 3D turntable immediately
+    applyThemeState(initialDark, { persist: false });
 
     // Audio engine callbacks
     audioEngine.setAudioElement(document.getElementById('html5-audio'));
@@ -384,27 +429,7 @@ async function initApp() {
 
     // Compact Left-to-Right Light / Dark Theme Toggle
     document.getElementById('btn-theme-toggle').addEventListener('click', () => {
-        AppState.isDarkMode = !AppState.isDarkMode;
-        document.body.classList.toggle('dark-theme', AppState.isDarkMode);
-
-        const thumb = document.getElementById('theme-toggle-thumb');
-        const lightLbl = document.getElementById('theme-label-light');
-        const darkLbl = document.getElementById('theme-label-dark');
-
-        if (AppState.isDarkMode) {
-            thumb.style.transform = 'translateX(32px)';
-            lightLbl.className = 'w-6 h-6 flex items-center justify-center text-muted transition-colors duration-300';
-            darkLbl.className = 'w-6 h-6 flex items-center justify-center text-alabaster transition-colors duration-300';
-        } else {
-            thumb.style.transform = 'translateX(0px)';
-            lightLbl.className = 'w-6 h-6 flex items-center justify-center text-alabaster transition-colors duration-300';
-            darkLbl.className = 'w-6 h-6 flex items-center justify-center text-muted transition-colors duration-300';
-        }
-
-        const currentTurntable = getTurntable();
-        if (currentTurntable) {
-            currentTurntable.setTheme(AppState.isDarkMode);
-        }
+        applyThemeState(!AppState.isDarkMode, { persist: true });
     });
 
     // Bind Transport Controls
