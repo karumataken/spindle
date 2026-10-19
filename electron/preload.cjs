@@ -42,5 +42,14 @@ contextBridge.exposeInMainWorld('spindleDesktop', {
         const handler = (_event, data) => callback(data);
         ipcRenderer.on('spindle:update-available', handler);
         return () => ipcRenderer.removeListener('spindle:update-available', handler);
+    },
+    minimizeWindow: () => ipcRenderer.invoke('spindle:window-minimize'),
+    maximizeWindow: () => ipcRenderer.invoke('spindle:window-maximize'),
+    closeWindow: () => ipcRenderer.invoke('spindle:window-close'),
+    isWindowMaximized: () => ipcRenderer.invoke('spindle:window-is-maximized'),
+    onWindowMaximized: (callback) => {
+        const handler = (_event, isMax) => callback(isMax);
+        ipcRenderer.on('spindle:window-maximized-change', handler);
+        return () => ipcRenderer.removeListener('spindle:window-maximized-change', handler);
     }
 });

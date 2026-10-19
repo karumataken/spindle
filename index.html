@@ -59,7 +59,33 @@
         }
     </style>
 </head>
-<body class="h-screen w-screen flex flex-col lg:flex-row overflow-hidden">
+<body class="h-screen w-screen flex flex-col overflow-hidden select-none bg-alabaster">
+
+    <!-- THIN CUSTOM WINDOW TITLE BAR (Frameless window draggable header) -->
+    <div id="spindle-titlebar" class="w-full h-7 shrink-0 bg-alabaster border-b border-stone/50 flex items-center justify-end px-1.5 z-40 transition-colors duration-250" style="-webkit-app-region: drag;">
+        <!-- Window Controls (Minimize, Maximize/Restore, Close) -->
+        <div class="flex items-center gap-0.5 h-full" style="-webkit-app-region: no-drag;">
+            <button id="titlebar-minimize" type="button" class="w-7 h-5 flex items-center justify-center rounded-md text-muted hover:text-espresso hover:bg-oatmeal transition" title="Minimize">
+                <svg class="w-2.5 h-2.5" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.2" fill="none">
+                    <line x1="1" y1="5" x2="9" y2="5" stroke-linecap="round"/>
+                </svg>
+            </button>
+            <button id="titlebar-maximize" type="button" class="w-7 h-5 flex items-center justify-center rounded-md text-muted hover:text-espresso hover:bg-oatmeal transition" title="Maximize">
+                <svg id="titlebar-max-icon" class="w-2.5 h-2.5" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.1" fill="none">
+                    <rect x="1.5" y="1.5" width="7" height="7" rx="1"/>
+                </svg>
+            </button>
+            <button id="titlebar-close" type="button" class="w-7 h-5 flex items-center justify-center rounded-md text-muted hover:text-alabaster hover:bg-terracotta transition" title="Close">
+                <svg class="w-2.5 h-2.5" viewBox="0 0 10 10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none">
+                    <line x1="2" y1="2" x2="8" y2="8"/>
+                    <line x1="8" y1="2" x2="2" y2="8"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN APP LAYOUT CONTAINER -->
+    <div id="app-layout-container" class="flex-1 w-full min-h-0 flex flex-col lg:flex-row overflow-hidden relative">
 
     <!-- LEFT PANEL: SIDEBAR MENU & PLAYER -->
     <aside id="sidebar-panel" class="w-full lg:w-[460px] xl:w-[510px] h-[58%] lg:h-full bg-alabaster border-b lg:border-b-0 lg:border-r border-stone/70 flex flex-col justify-between z-20 shadow-xl lg:shadow-none transition-colors duration-300 intro-hidden">
@@ -399,6 +425,7 @@
             </div>
         </div>
     </main>
+    </div>
 
     <!-- FLOATING 3-DOT CONTEXT MENU -->
     <div id="context-menu" class="fixed z-50 hidden min-w-[190px] bg-alabaster border border-stone rounded-2xl shadow-xl py-1.5 text-xs text-espresso overflow-hidden"></div>

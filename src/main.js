@@ -441,6 +441,55 @@ async function initApp() {
 
     document.getElementById('btn-create-playlist').addEventListener('click', showCreatePlaylistModal);
 
+    // Custom Window Titlebar Controls (for desktop app)
+    const btnMin = document.getElementById('titlebar-minimize');
+    const btnMax = document.getElementById('titlebar-maximize');
+    const btnClose = document.getElementById('titlebar-close');
+    const titlebarEl = document.getElementById('spindle-titlebar');
+    const maxIcon = document.getElementById('titlebar-max-icon');
+
+    const updateMaxIcon = (isMax) => {
+        if (!maxIcon) return;
+        if (isMax) {
+            maxIcon.innerHTML = `
+                <rect x="2.5" y="1" width="6.5" height="6.5" rx="0.5" stroke="currentColor" stroke-width="1" fill="none"/>
+                <path d="M1 3.5V8.5C1 8.8 1.2 9 1.5 9H6.5" stroke="currentColor" stroke-width="1" fill="none"/>
+            `;
+        } else {
+            maxIcon.innerHTML = `<rect x="1.5" y="1.5" width="7" height="7" rx="1"/>`;
+        }
+    };
+
+    if (window.spindleDesktop?.isDesktop) {
+        btnMin?.addEventListener('click', () => {
+            window.spindleDesktop.minimizeWindow?.();
+        });
+
+        btnMax?.addEventListener('click', async () => {
+            const isNowMax = await window.spindleDesktop.maximizeWindow?.();
+            updateMaxIcon(Boolean(isNowMax));
+        });
+
+        btnClose?.addEventListener('click', () => {
+            window.spindleDesktop.closeWindow?.();
+        });
+
+        titlebarEl?.addEventListener('dblclick', async (e) => {
+            if (e.target.closest('button')) return;
+            const isNowMax = await window.spindleDesktop.maximizeWindow?.();
+            updateMaxIcon(Boolean(isNowMax));
+        });
+
+        window.spindleDesktop.onWindowMaximized?.((isMax) => {
+            updateMaxIcon(Boolean(isMax));
+        });
+    } else {
+        // If loaded in a regular browser (dev preview mode), hide the window controls
+        const winControls = titlebarEl?.querySelector('div');
+        if (winControls) winControls.style.display = 'none';
+        if (titlebarEl) titlebarEl.style.display = 'none';
+    }
+
     // Modal close handlers
     document.getElementById('modal-close').addEventListener('click', closeModal);
     const modalBackdrop = document.getElementById('modal-backdrop');

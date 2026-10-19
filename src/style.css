@@ -166,6 +166,14 @@ body.dark-theme .hover\:bg-alabaster\/60:hover {
 body.dark-theme #spindle-logo-text {
     fill: #DDD7CE;
 }
+#spindle-titlebar {
+    -webkit-user-select: none;
+    user-select: none;
+}
+body.dark-theme #spindle-titlebar {
+    background-color: #211E1B !important;
+    border-color: #38332E !important;
+}
 #btn-about-app:hover #spindle-logo-text,
 body.dark-theme #btn-about-app:hover #spindle-logo-text {
     fill: #C85A32 !important;

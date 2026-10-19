@@ -235,8 +235,10 @@ function createWindow() {
         height: 860,
         minWidth: 920,
         minHeight: 640,
-        backgroundColor: '#1E1B18',
+        backgroundColor: '#F6F4F0',
         title: 'Spindle',
+        frame: false,
+        titleBarStyle: 'hidden',
         icon: fs.existsSync(iconPath) ? iconPath : undefined,
         autoHideMenuBar: true,
         webPreferences: {
@@ -246,6 +248,18 @@ function createWindow() {
             sandbox: true,
             webSecurity: true,
             backgroundThrottling: false
+        }
+    });
+
+    mainWindow.on('maximize', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('spindle:window-maximized-change', true);
+        }
+    });
+
+    mainWindow.on('unmaximize', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('spindle:window-maximized-change', false);
         }
     });
 
@@ -1229,3 +1243,34 @@ ipcMain.handle('spindle:open-music-folder', async (_event, subPath) => {
     }
     return true;
 });
+
+// Window Controls for frameless custom titlebar
+ipcMain.handle('spindle:window-minimize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.minimize();
+    }
+});
+
+ipcMain.handle('spindle:window-maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        if (mainWindow.isMaximized()) {
+            mainWindow.unmaximize();
+            return false;
+        } else {
+            mainWindow.maximize();
+            return true;
+        }
+    }
+    return false;
+});
+
+ipcMain.handle('spindle:window-close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.close();
+    }
+});
+
+ipcMain.handle('spindle:window-is-maximized', () => {
+    return mainWindow && !mainWindow.isDestroyed() ? mainWindow.isMaximized() : false;
+});
+
