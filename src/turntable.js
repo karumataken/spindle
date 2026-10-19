@@ -1284,37 +1284,6 @@ export class Turntable3D {
         this.strobeLens.rotation.y = 0.62;
         this.turntableGroup.add(this.strobeLens);
 
-        // Rectangular Machined Start/Stop Tactile Switch
-        const startStopBezel = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.03, 0.28), darkMat);
-        startStopBezel.position.set(-1.98, 0.325, 1.80);
-        this.turntableGroup.add(startStopBezel);
-
-        const startStopCap = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.042, 0.22), machinedAlumMat);
-        startStopCap.position.set(-1.98, 0.34, 1.80);
-        this.turntableGroup.add(startStopCap);
-
-        // Dedicated 33 & 45 RPM Speed Selector Buttons + Active LED
-        [-1.62, -1.40].forEach((bx, idx) => {
-            const rpmBezel = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.025, 0.15), darkMat);
-            rpmBezel.position.set(bx, 0.324, 1.84);
-            this.turntableGroup.add(rpmBezel);
-
-            const rpmCap = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.036, 0.11), idx === 0 ? chromeMat : machinedAlumMat);
-            rpmCap.position.set(bx, 0.336, 1.84);
-            this.turntableGroup.add(rpmCap);
-
-            const rpmLed = new THREE.Mesh(
-                new THREE.BoxGeometry(0.08, 0.008, 0.02),
-                new THREE.MeshStandardMaterial({
-                    color: idx === 0 ? 0xFF4500 : 0x3A2018,
-                    emissive: idx === 0 ? 0xFF3A00 : 0x000000,
-                    emissiveIntensity: idx === 0 ? 1.2 : 0.0
-                })
-            );
-            rpmLed.position.set(bx, 0.355, 1.81);
-            this.turntableGroup.add(rpmLed);
-        });
-
         // Pop-up Stylus Target Illuminator Tower
         const targetWell = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.02, 24), darkMat);
         targetWell.position.set(0.78, 0.322, 1.28);
