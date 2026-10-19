@@ -26,7 +26,8 @@ import {
     cleanPlaylistTitle,
     upgradeArtworkUrl,
     handleAudioLoadError,
-    initMediaSession
+    initMediaSession,
+    initUpdateChecker
 } from './ui.js';
 import { initDownloadManager, cleanupDownloadManager } from './downloadManager.js';
 
@@ -148,6 +149,7 @@ async function initApp() {
 
     await hydrateLibrary();
     initDownloadManager();
+    initUpdateChecker();
     initMediaSession();
 
     const turntableInstance = new Turntable3D('canvas-container');

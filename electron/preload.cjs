@@ -34,5 +34,13 @@ contextBridge.exposeInMainWorld('spindleDesktop', {
     },
     openMusicFolder: (subPath) => ipcRenderer.invoke('spindle:open-music-folder', subPath),
     renamePlaylistFolder: (params) => ipcRenderer.invoke('spindle:rename-playlist-folder', params),
-    deletePlaylistFolder: (folderName) => ipcRenderer.invoke('spindle:delete-playlist-folder', folderName)
+    deletePlaylistFolder: (folderName) => ipcRenderer.invoke('spindle:delete-playlist-folder', folderName),
+    checkForUpdates: () => ipcRenderer.invoke('spindle:check-for-updates'),
+    openExternalUrl: (url) => ipcRenderer.invoke('spindle:open-external-url', url),
+    getAppVersion: () => ipcRenderer.invoke('spindle:get-app-version'),
+    onUpdateAvailable: (callback) => {
+        const handler = (_event, data) => callback(data);
+        ipcRenderer.on('spindle:update-available', handler);
+        return () => ipcRenderer.removeListener('spindle:update-available', handler);
+    }
 });

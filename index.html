@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Spindle</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="alternate icon" type="image/png" href="/favicon.png">
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts: Cormorant Garamond, Plus Jakarta Sans, JetBrains Mono, Caveat -->
@@ -64,11 +66,14 @@
         
         <!-- Top Header with Spindle Cursive Logo -->
         <header class="px-6 pt-3.5 pb-2.5 flex items-center justify-between border-b border-stone/50 shrink-0">
-            <div class="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 185 48" class="h-9 w-auto -ml-1">
-                    <text id="spindle-logo-text" x="4" y="36" font-family="'Caveat', cursive" font-weight="600" font-size="42" fill="#1E1B18" class="transition-colors duration-300">Spindle</text>
-                    <circle cx="57" cy="12" r="2.5" fill="#C85A32"/>
-                </svg>
+            <div class="flex items-center gap-2">
+                <button id="btn-about-app" type="button" class="flex items-center gap-2 group text-left cursor-pointer focus:outline-none" title="About Spindle & Updates">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 185 48" class="h-9 w-auto -ml-1">
+                        <text id="spindle-logo-text" x="4" y="36" font-family="'Caveat', cursive" font-weight="600" font-size="42" fill="#1E1B18" class="transition-colors duration-300 group-hover:fill-terracotta">Spindle</text>
+                        <circle cx="57" cy="12" r="2.5" fill="#C85A32"/>
+                    </svg>
+                    <span id="app-version-badge" class="font-mono text-[10px] px-1.5 py-0.5 rounded-md bg-oatmeal border border-stone/70 text-muted group-hover:text-espresso group-hover:border-terracotta transition">v1.0.0</span>
+                </button>
             </div>
             <!-- Search bar for playlists and songs -->
             <div class="relative flex items-center w-44 sm:w-52">
@@ -98,6 +103,22 @@
                 </button>
             </div>
         </header>
+
+        <!-- Update Notification Banner (slides down when an update is available) -->
+        <div id="update-notification-banner" class="hidden px-4 py-2 bg-terracotta/10 border-b border-terracotta/30 items-center justify-between text-xs text-espresso transition-all duration-300">
+            <div class="flex items-center gap-2 min-w-0 pr-2">
+                <span class="w-2 h-2 rounded-full bg-terracotta shrink-0 animate-pulse"></span>
+                <p class="truncate"><strong id="update-tag-text">Update available</strong> — <span id="update-name-text" class="text-muted">New release ready</span></p>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button id="btn-update-open" type="button" class="px-2.5 py-1 rounded-lg bg-terracotta text-alabaster hover:bg-[#b04b25] text-[11px] font-medium transition shadow-xs">
+                    Update
+                </button>
+                <button id="btn-update-dismiss" type="button" class="p-1 rounded-lg hover:bg-oatmeal text-muted hover:text-espresso transition" title="Dismiss">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
 
         <!-- TOP OF MENU: CURRENTLY OPENED PLAYLIST HERO (Centered, bigger artwork, details below) -->
         <section id="opened-playlist-hero" class="hidden px-6 pt-4 pb-4 border-b border-stone/60 bg-alabaster flex-col items-center text-center shrink-0 relative transition-colors duration-300">

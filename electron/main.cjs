@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const { spawn, execFileSync } = require('child_process');
 const { Readable } = require('stream');
+const https = require('https');
 
 const ALLOWED_MEDIA_EXTENSIONS = new Set([
     '.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.opus', '.webm',
@@ -152,8 +153,60 @@ function findBinary(name) {
     return exeName;
 }
 
+const GITHUB_REPO = 'karumataken/spindle';
+
+function parseSemver(v) {
+    if (!v || typeof v !== 'string') return [0, 0, 0];
+    const clean = v.trim().replace(/^[vV]/, '');
+    const parts = clean.split('-')[0].split('.').map(n => parseInt(n, 10) || 0);
+    while (parts.length < 3) parts.push(0);
+    return parts.slice(0, 3);
+}
+
+function isNewerVersion(current, latest) {
+    const [cMajor, cMinor, cPatch] = parseSemver(current);
+    const [lMajor, lMinor, lPatch] = parseSemver(latest);
+    if (lMajor > cMajor) return true;
+    if (lMajor < cMajor) return false;
+    if (lMinor > cMinor) return true;
+    if (lMinor < cMinor) return false;
+    return lPatch > cPatch;
+}
+
+function fetchLatestRelease() {
+    return new Promise((resolve) => {
+        const req = https.get(
+            `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+            {
+                headers: {
+                    'User-Agent': 'Spindle-Music-Player',
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                timeout: 8000
+            },
+            (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    if (res.statusCode !== 200) {
+                        return resolve(null);
+                    }
+                    try {
+                        resolve(JSON.parse(data));
+                    } catch (_) {
+                        resolve(null);
+                    }
+                });
+            }
+        );
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+    });
+}
+
 function createWindow() {
     app.setName('Spindle');
+    const iconPath = path.join(__dirname, '../build/icon.png');
     mainWindow = new BrowserWindow({
         width: 1320,
         height: 860,
@@ -161,6 +214,7 @@ function createWindow() {
         minHeight: 640,
         backgroundColor: '#1E1B18',
         title: 'Spindle',
+        icon: fs.existsSync(iconPath) ? iconPath : undefined,
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),
@@ -188,6 +242,32 @@ function createWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
+
+    // Auto-check for updates after app is loaded (4s delay)
+    setTimeout(async () => {
+        try {
+            const currentVersion = app.getVersion();
+            const release = await fetchLatestRelease();
+            if (release && release.tag_name && isNewerVersion(currentVersion, release.tag_name)) {
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('spindle:update-available', {
+                        hasUpdate: true,
+                        currentVersion,
+                        latestVersion: release.tag_name,
+                        releaseName: release.name || release.tag_name,
+                        releaseUrl: release.html_url,
+                        releaseNotes: release.body || '',
+                        publishedAt: release.published_at,
+                        assets: (release.assets || []).map(a => ({
+                            name: a.name,
+                            size: a.size,
+                            downloadUrl: a.browser_download_url
+                        }))
+                    });
+                }
+            }
+        } catch (_) {}
+    }, 4000);
 }
 
 // Setup custom streaming media protocol with full HTTP range seeking support
@@ -287,6 +367,44 @@ ipcMain.handle('spindle:get-app-info', async () => {
         musicDir: getMusicDir(),
         isPackaged: app.isPackaged
     };
+});
+
+// IPC Handler: Check for updates via GitHub Releases
+ipcMain.handle('spindle:check-for-updates', async () => {
+    const currentVersion = app.getVersion();
+    const release = await fetchLatestRelease();
+    if (!release || !release.tag_name) {
+        return { hasUpdate: false, currentVersion };
+    }
+    const hasUpdate = isNewerVersion(currentVersion, release.tag_name);
+    return {
+        hasUpdate,
+        currentVersion,
+        latestVersion: release.tag_name,
+        releaseName: release.name || release.tag_name,
+        releaseUrl: release.html_url,
+        releaseNotes: release.body || '',
+        publishedAt: release.published_at,
+        assets: (release.assets || []).map(a => ({
+            name: a.name,
+            size: a.size,
+            downloadUrl: a.browser_download_url
+        }))
+    };
+});
+
+// IPC Handler: Open URL in default browser
+ipcMain.handle('spindle:open-external-url', async (_event, url) => {
+    if (url && typeof url === 'string' && (url.startsWith('https://') || url.startsWith('http://'))) {
+        await shell.openExternal(url);
+        return { success: true };
+    }
+    return { success: false, error: 'Invalid URL' };
+});
+
+// IPC Handler: Get current app version
+ipcMain.handle('spindle:get-app-version', () => {
+    return app.getVersion();
 });
 
 // IPC Handler: Verify yt-dlp & ffmpeg

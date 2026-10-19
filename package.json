@@ -30,7 +30,8 @@
     "linux": {
       "target": [
         "AppImage",
-        "rpm"
+        "rpm",
+        "deb"
       ],
       "category": "AudioVideo",
       "icon": "build/icon.png"

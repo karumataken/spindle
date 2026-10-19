@@ -1904,3 +1904,227 @@ export async function handleLocalFiles(fileList, targetPlaylistId = null) {
     openPlaylist(destPl.id);
     selectAndPlayTrack(firstAddedIndex);
 }
+
+// Update Checker & About Modal
+export function initUpdateChecker() {
+    if (typeof window === 'undefined') return;
+
+    if (window.spindleDesktop?.getAppVersion) {
+        window.spindleDesktop.getAppVersion().then(v => {
+            if (v) {
+                const badge = document.getElementById('app-version-badge');
+                if (badge) badge.textContent = `v${v}`;
+            }
+        }).catch(() => {});
+    }
+
+    const aboutBtn = document.getElementById('btn-about-app');
+    if (aboutBtn) {
+        aboutBtn.onclick = () => showAboutModal();
+    }
+
+    const banner = document.getElementById('update-notification-banner');
+    const updateBtn = document.getElementById('btn-update-open');
+    const dismissBtn = document.getElementById('btn-update-dismiss');
+    const tagText = document.getElementById('update-tag-text');
+    const nameText = document.getElementById('update-name-text');
+
+    let currentUpdateInfo = null;
+
+    const displayBanner = (info) => {
+        if (!info || !info.hasUpdate) return;
+        currentUpdateInfo = info;
+        if (tagText) tagText.textContent = `${info.latestVersion} available`;
+        if (nameText) nameText.textContent = info.releaseName || 'New release ready';
+        if (banner) {
+            banner.classList.remove('hidden');
+            banner.classList.add('flex');
+        }
+    };
+
+    if (updateBtn) {
+        updateBtn.onclick = () => {
+            if (currentUpdateInfo) {
+                showUpdateModal(currentUpdateInfo);
+            }
+        };
+    }
+
+    if (dismissBtn) {
+        dismissBtn.onclick = () => {
+            if (banner) {
+                banner.classList.add('hidden');
+                banner.classList.remove('flex');
+            }
+        };
+    }
+
+    if (window.spindleDesktop?.onUpdateAvailable) {
+        window.spindleDesktop.onUpdateAvailable((info) => {
+            displayBanner(info);
+        });
+    }
+}
+
+export function showUpdateModal(info) {
+    const assetsHtml = (info.assets && info.assets.length > 0)
+        ? `
+            <div class="space-y-1.5 pt-2">
+                <label class="block font-mono text-[11px] uppercase text-muted">Direct Downloads</label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    ${info.assets.map(a => `
+                        <button type="button" data-url="${escapeHtml(a.downloadUrl)}" class="btn-download-asset flex items-center justify-between px-3 py-2 rounded-xl bg-alabaster border border-stone hover:border-terracotta hover:bg-oatmeal text-left transition text-xs font-mono group">
+                            <span class="truncate text-espresso font-medium">${escapeHtml(a.name)}</span>
+                            <span class="text-terracotta ml-1 shrink-0">↓</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `
+        : '';
+
+    openModal('Update Available', `
+        <div class="space-y-4">
+            <div class="flex items-center justify-between pb-2 border-b border-stone/50">
+                <div>
+                    <h3 class="font-serif text-lg font-semibold text-espresso">${escapeHtml(info.releaseName || info.latestVersion)}</h3>
+                    <p class="font-mono text-[11px] text-muted">Installed: v${escapeHtml(info.currentVersion)} → Latest: ${escapeHtml(info.latestVersion)}</p>
+                </div>
+                <span class="px-2.5 py-1 rounded-full bg-terracotta/15 border border-terracotta/40 text-terracotta text-[11px] font-mono font-medium">New Release</span>
+            </div>
+
+            ${info.releaseNotes ? `
+                <div>
+                    <label class="block font-mono text-[11px] uppercase text-muted mb-1">Release Notes</label>
+                    <div class="max-h-48 overflow-y-auto p-3 rounded-xl bg-oatmeal/40 border border-stone text-xs text-espresso whitespace-pre-wrap font-sans leading-relaxed">
+                        ${escapeHtml(info.releaseNotes)}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${assetsHtml}
+
+            <div class="pt-3 flex flex-wrap items-center justify-between gap-2 border-t border-stone/50">
+                <button type="button" id="btn-open-github-release" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-stone bg-alabaster hover:bg-oatmeal text-espresso text-xs font-medium transition">
+                    <svg class="w-3.5 h-3.5 text-muted" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+                    <span>View on GitHub</span>
+                </button>
+                <button type="button" id="btn-close-update-modal" class="px-5 py-2 rounded-xl bg-terracotta text-alabaster hover:bg-[#b04b25] text-xs font-medium transition shadow-sm">
+                    Done
+                </button>
+            </div>
+        </div>
+    `);
+
+    const modalBody = document.getElementById('modal-body');
+    const closeBtn = modalBody.querySelector('#btn-close-update-modal');
+    if (closeBtn) closeBtn.onclick = closeModal;
+
+    const ghBtn = modalBody.querySelector('#btn-open-github-release');
+    if (ghBtn) {
+        ghBtn.onclick = () => {
+            const url = info.releaseUrl || 'https://github.com/karumataken/spindle/releases';
+            if (window.spindleDesktop?.openExternalUrl) {
+                window.spindleDesktop.openExternalUrl(url);
+            } else {
+                window.open(url, '_blank');
+            }
+        };
+    }
+
+    modalBody.querySelectorAll('.btn-download-asset').forEach(btn => {
+        btn.onclick = () => {
+            const u = btn.dataset.url;
+            if (window.spindleDesktop?.openExternalUrl) {
+                window.spindleDesktop.openExternalUrl(u);
+            } else {
+                window.open(u, '_blank');
+            }
+        };
+    });
+}
+
+export async function showAboutModal() {
+    let currentVer = '1.0.0';
+    if (window.spindleDesktop?.getAppVersion) {
+        try { currentVer = await window.spindleDesktop.getAppVersion(); } catch (_) {}
+    }
+
+    openModal('About Spindle', `
+        <div class="space-y-4 text-center py-2">
+            <div class="flex justify-center mb-1">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 185 48" class="h-12 w-auto">
+                    <text x="4" y="36" font-family="'Caveat', cursive" font-weight="600" font-size="44" fill="#C85A32">Spindle</text>
+                    <circle cx="57" cy="12" r="2.5" fill="#1E1B18"/>
+                </svg>
+            </div>
+            <div>
+                <p class="font-serif text-base font-semibold text-espresso">Spindle Music Player</p>
+                <p class="font-mono text-xs text-muted mt-0.5">Version ${escapeHtml(currentVer)}</p>
+            </div>
+            <div class="p-3.5 rounded-2xl bg-oatmeal/60 border border-stone/80 text-xs text-espresso text-left space-y-1.5 leading-relaxed">
+                <p class="font-medium text-espresso">Tactile, analog-inspired retro turntable & offline music player.</p>
+                <p class="text-muted">An experimental project vibe-coded with Gemini. Feedback, ideas, and suggestions are always welcome!</p>
+            </div>
+            <div class="space-y-2 pt-1">
+                <button type="button" id="btn-manual-check-updates" class="w-full py-2 rounded-xl bg-alabaster border border-stone hover:border-terracotta hover:bg-oatmeal text-espresso text-xs font-mono font-medium transition flex items-center justify-center gap-2">
+                    <span id="check-update-spinner" class="hidden w-3 h-3 border-2 border-terracotta border-t-transparent rounded-full animate-spin"></span>
+                    <span id="check-update-label">Check for Updates</span>
+                </button>
+                <button type="button" id="btn-about-github" class="w-full py-2 rounded-xl bg-oatmeal/40 hover:bg-oatmeal text-muted hover:text-espresso text-xs font-mono transition flex items-center justify-center gap-1.5">
+                    <span>GitHub Repository ↗</span>
+                </button>
+            </div>
+        </div>
+    `);
+
+    const modalBody = document.getElementById('modal-body');
+    const checkBtn = modalBody.querySelector('#btn-manual-check-updates');
+    const checkLabel = modalBody.querySelector('#check-update-label');
+    const checkSpinner = modalBody.querySelector('#check-update-spinner');
+    const ghBtn = modalBody.querySelector('#btn-about-github');
+
+    if (ghBtn) {
+        ghBtn.onclick = () => {
+            const url = 'https://github.com/karumataken/spindle';
+            if (window.spindleDesktop?.openExternalUrl) {
+                window.spindleDesktop.openExternalUrl(url);
+            } else {
+                window.open(url, '_blank');
+            }
+        };
+    }
+
+    if (checkBtn) {
+        checkBtn.onclick = async () => {
+            if (!window.spindleDesktop?.checkForUpdates) {
+                checkLabel.textContent = 'Updates only available in desktop app.';
+                return;
+            }
+            checkSpinner.classList.remove('hidden');
+            checkLabel.textContent = 'Checking GitHub...';
+            checkBtn.disabled = true;
+
+            try {
+                const res = await window.spindleDesktop.checkForUpdates();
+                checkSpinner.classList.add('hidden');
+                if (res && res.hasUpdate) {
+                    closeModal();
+                    showUpdateModal(res);
+                } else {
+                    checkLabel.textContent = `You're on the latest version (v${currentVer}) ✓`;
+                    checkBtn.classList.add('bg-stone/20', 'text-muted');
+                    setTimeout(() => {
+                        checkBtn.disabled = false;
+                        checkLabel.textContent = 'Check for Updates';
+                        checkBtn.classList.remove('bg-stone/20', 'text-muted');
+                    }, 3000);
+                }
+            } catch (err) {
+                checkSpinner.classList.add('hidden');
+                checkLabel.textContent = 'Could not reach GitHub';
+                checkBtn.disabled = false;
+            }
+        };
+    }
+}
