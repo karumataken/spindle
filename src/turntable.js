@@ -1370,10 +1370,38 @@ export class Turntable3D {
         knobBase.castShadow = true;
         this.turntableGroup.add(knobBase);
 
-        this.powerLever = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.095, 0.25), darkMat);
-        this.powerLever.position.set(1.75, 0.425, 1.48);
-        this.powerLever.castShadow = true;
+        // Sculpted Rotary Switch with Rounded Winged Lever & Accent Index Line
+        this.powerLever = new THREE.Group();
+        this.powerLever.position.set(1.75, 0.400, 1.48);
         this.turntableGroup.add(this.powerLever);
+
+        const leverHub = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.115, 0.042, 32), darkMat);
+        leverHub.position.set(0, 0.021, 0);
+        leverHub.castShadow = true;
+        this.powerLever.add(leverHub);
+
+        const leverBody = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.055, 0.14), darkMat);
+        leverBody.position.set(0, 0.0275, 0);
+        leverBody.castShadow = true;
+        this.powerLever.add(leverBody);
+
+        const frontCap = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.055, 20), darkMat);
+        frontCap.position.set(0, 0.0275, 0.07);
+        frontCap.castShadow = true;
+        this.powerLever.add(frontCap);
+
+        const backCap = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.055, 20), darkMat);
+        backCap.position.set(0, 0.0275, -0.07);
+        backCap.castShadow = true;
+        this.powerLever.add(backCap);
+
+        const indexLine = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.005, 0.16), accentMat);
+        indexLine.position.set(0, 0.056, 0);
+        this.powerLever.add(indexLine);
+
+        const centerJewel = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.006, 16), accentMat);
+        centerJewel.position.set(0, 0.057, 0);
+        this.powerLever.add(centerJewel);
 
         const speedBtn = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.115, 0.075, 28), knurledAlumMat);
         speedBtn.position.set(1.25, 0.345, 1.48);
