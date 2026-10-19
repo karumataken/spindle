@@ -211,7 +211,8 @@ export function updatePlayerUI() {
     if (artworkUrl) {
         if (artImg) {
             artImg.src = artworkUrl;
-            artImg.className = 'absolute inset-0 w-full h-full object-cover object-center block';
+            artImg.className = 'absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block';
+            artImg.parentElement?.classList.remove('bg-espresso');
             artImg.onerror = () => {
                 if (artImg.src.includes('maxresdefault.jpg')) {
                     artImg.src = artImg.src.replace('maxresdefault.jpg', 'hq720.jpg');
@@ -219,13 +220,17 @@ export function updatePlayerUI() {
                     artImg.src = artImg.src.replace('hq720.jpg', 'hqdefault.jpg');
                 } else {
                     artImg.className = 'hidden';
+                    artImg.parentElement?.classList.add('bg-espresso');
                     if (coverDisc) coverDisc.classList.remove('hidden');
                 }
             };
         }
         if (coverDisc) coverDisc.classList.add('hidden');
     } else {
-        if (artImg) artImg.className = 'hidden';
+        if (artImg) {
+            artImg.className = 'hidden';
+            artImg.parentElement?.classList.add('bg-espresso');
+        }
         if (coverDisc) {
             coverDisc.classList.remove('hidden');
             const color = sanitizeColor((playingPl && playingPl.color) || track.labelColor, '#C85A32');
@@ -348,8 +353,10 @@ export function renderSidebarView() {
         }
 
         if (displayArtwork) {
-            heroArt.innerHTML = `<img src="${displayArtwork}" class="absolute inset-0 w-full h-full object-cover object-center block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.onerror=null; this.parentElement.innerHTML=\`${getHeroFallbackDiscHtml(pl).replace(/`/g, '\\`')}\`; }">`;
+            heroArt.classList.remove('bg-espresso');
+            heroArt.innerHTML = `<img src="${displayArtwork}" class="absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.onerror=null; this.parentElement.classList.add('bg-espresso'); this.parentElement.innerHTML=\`${getHeroFallbackDiscHtml(pl).replace(/`/g, '\\`')}\`; }">`;
         } else {
+            heroArt.classList.add('bg-espresso');
             heroArt.innerHTML = getHeroFallbackDiscHtml(pl);
         }
 
@@ -407,7 +414,7 @@ export function createPlaylistRow(pl) {
     const plColor = sanitizeColor(pl.color, '#C85A32');
     const artworkHtml = rowArt
         ? `<div class="w-10 h-10 rounded-xl overflow-hidden shrink-0 relative border border-stone">
-            <img src="${rowArt}" class="absolute inset-0 w-full h-full object-cover object-center block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.parentElement.style.display='none'; }">
+            <img src="${rowArt}" class="absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.parentElement.style.display='none'; }">
            </div>`
         : `<div class="w-10 h-10 rounded-xl bg-espresso flex items-center justify-center shrink-0 relative border border-stone">
             <div class="w-7 h-7 rounded-full flex items-center justify-center" style="background: radial-gradient(circle, ${plColor} 0%, ${plColor} 35%, #1E1B18 38%, #1E1B18 100%);">
@@ -1250,7 +1257,8 @@ export function showCreatePlaylistModal() {
     modalBody.querySelector('#btn-create-upload-art').onclick = () => {
         AppState.artworkUploadCallback = (dataUrl) => {
             customArtwork = dataUrl;
-            preview.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover">`;
+            preview.classList.remove('bg-espresso');
+            preview.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover scale-[1.04] block">`;
         };
         document.getElementById('file-upload-artwork').click();
     };
@@ -1346,9 +1354,9 @@ export function showChangePlaylistArtworkModal(playlist) {
     openModal('Change Playlist Artwork', `
         <div class="space-y-4">
             <div class="flex items-center gap-4">
-                <div id="art-preview" class="w-20 h-20 rounded-2xl bg-espresso border border-stone overflow-hidden shrink-0 flex items-center justify-center">
+                <div id="art-preview" class="w-20 h-20 rounded-2xl ${chosenArtwork ? '' : 'bg-espresso'} border border-stone overflow-hidden shrink-0 flex items-center justify-center">
                     ${chosenArtwork
-                        ? `<img src="${chosenArtwork}" class="w-full h-full object-cover">`
+                        ? `<img src="${chosenArtwork}" class="w-full h-full object-cover scale-[1.04] block">`
                         : `<div class="w-14 h-14 rounded-full" style="background: radial-gradient(circle, ${chosenColor} 0%, ${chosenColor} 35%, #111 38%, #111 100%);"></div>`
                     }
                 </div>
@@ -1381,13 +1389,15 @@ export function showChangePlaylistArtworkModal(playlist) {
     modalBody.querySelector('#btn-pick-art').onclick = () => {
         AppState.artworkUploadCallback = (dataUrl) => {
             chosenArtwork = dataUrl;
-            preview.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover">`;
+            preview.classList.remove('bg-espresso');
+            preview.innerHTML = `<img src="${dataUrl}" class="w-full h-full object-cover scale-[1.04] block">`;
         };
         document.getElementById('file-upload-artwork').click();
     };
 
     modalBody.querySelector('#btn-reset-art').onclick = () => {
         chosenArtwork = null;
+        preview.classList.add('bg-espresso');
         preview.innerHTML = `<div class="w-14 h-14 rounded-full" style="background: radial-gradient(circle, ${chosenColor} 0%, ${chosenColor} 35%, #111 38%, #111 100%);"></div>`;
     };
 
@@ -1711,7 +1721,12 @@ export function stopPlayback() {
     AppState.currentTime = 0;
     audioEngine.stopAllAudioOnly();
     if (turntable3D) {
+        if (typeof turntable3D._clearBgSwapTimers === 'function') {
+            turntable3D._clearBgSwapTimers();
+        }
+        turntable3D.pendingTrack = null;
         turntable3D.mechState = 'RETURNING_ARM';
+        turntable3D._needsRender = true;
     }
     renderSidebarView();
     updatePlayerUI();

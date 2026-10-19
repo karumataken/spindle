@@ -12,7 +12,7 @@ body {
     color: #1E1B18;
     font-family: 'Plus Jakarta Sans', sans-serif;
     overflow: hidden;
-    transition: background-color 0.35s ease, color 0.35s ease;
+    transition: background-color 250ms ease, color 250ms ease;
 }
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
@@ -85,6 +85,38 @@ input[type=range]::-webkit-slider-thumb:hover {
     border-bottom: 2px solid #C85A32 !important;
 }
 
+/* Synchronized theme transitions across all white, beige, stone, and text elements */
+#sidebar-panel header,
+#opened-playlist-hero,
+#playlist-list-section,
+#now-playing-section,
+#search-input,
+#playlist-count,
+#spindle-logo-text,
+#btn-theme-toggle,
+.bg-alabaster,
+.bg-alabaster\/85,
+.bg-alabaster\/75,
+.bg-alabaster\/60,
+.bg-alabaster\/90,
+.bg-oatmeal,
+.bg-oatmeal\/70,
+.bg-oatmeal\/60,
+.bg-oatmeal\/50,
+.bg-oatmeal\/40,
+.bg-stone,
+.bg-stone\/60,
+.border-stone,
+.border-stone\/80,
+.border-stone\/70,
+.border-stone\/60,
+.border-stone\/50,
+.border-stone\/40,
+.text-espresso,
+.text-muted {
+    transition: background-color 250ms ease, border-color 250ms ease, color 250ms ease, fill 250ms ease;
+}
+
 /* Warm, Low-Contrast Dark Theme Overrides (Easy on the eyes) */
 body.dark-theme {
     background-color: #211E1B;
@@ -99,6 +131,7 @@ body.dark-theme .bg-alabaster\/60,
 body.dark-theme .bg-alabaster\/90 {
     background-color: rgba(38, 34, 30, 0.88) !important;
 }
+body.dark-theme #playlist-list-section,
 body.dark-theme .bg-oatmeal,
 body.dark-theme .bg-oatmeal\/70,
 body.dark-theme .bg-oatmeal\/60,
@@ -150,7 +183,10 @@ body.dark-theme ::-webkit-scrollbar-thumb {
 #sidebar-panel {
     transition: margin-left 850ms cubic-bezier(0.16, 1, 0.3, 1),
                 margin-top 850ms cubic-bezier(0.16, 1, 0.3, 1),
-                opacity 650ms ease-out;
+                opacity 650ms ease-out,
+                background-color 250ms ease,
+                border-color 250ms ease,
+                color 250ms ease;
 }
 
 #sidebar-panel.intro-hidden {

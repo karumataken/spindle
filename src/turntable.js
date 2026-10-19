@@ -1499,13 +1499,74 @@ export class Turntable3D {
         this._needsRender = true;
     }
 
+    _clearBgSwapTimers() {
+        if (this._bgCheckTimer) {
+            clearTimeout(this._bgCheckTimer);
+            this._bgCheckTimer = null;
+        }
+        if (this._bgMaxTimer) {
+            clearTimeout(this._bgMaxTimer);
+            this._bgMaxTimer = null;
+        }
+    }
+
+    _completePendingTrackImmediately() {
+        this._clearBgSwapTimers();
+        if (!this.pendingTrack) return;
+        const trackToPlay = this.pendingTrack;
+        const autoPlay = this.pendingAutoPlay;
+        const sec = this.pendingStartSec || 0;
+        this.pendingTrack = null;
+
+        this.updateRecordLabel(trackToPlay);
+        this.recordHeight = 0;
+        this.cueLowering = false;
+
+        if (autoPlay) {
+            const progress = AppState.duration > 0
+                ? Math.min(1, Math.max(0, sec / AppState.duration))
+                : 0;
+            this.armYaw = 0.44 + progress * 0.34;
+            this.armPitch = 0.0044;
+            this.powerSwitchAngle = 0.35;
+            this.targetRPM = AppState.rpmMode;
+            this.currentRPM = AppState.rpmMode;
+            this.mechState = 'PLAYING';
+
+            if (this.recordGroup) this.recordGroup.position.y = 0.105;
+            if (this.tonearmYawGroup) this.tonearmYawGroup.rotation.y = -this.armYaw;
+            if (this.tonearmPitchGroup) this.tonearmPitchGroup.rotation.x = -this.armPitch;
+            if (this.powerLever) this.powerLever.rotation.y = this.powerSwitchAngle;
+            if (this.cueLever) this.cueLever.rotation.x = -this.armPitch * 2.4;
+
+            AppState.hasActiveSession = true;
+            AppState.playbackState = 'PLAYING';
+            AppState.currentTime = sec;
+            audioEngine.playTrack(trackToPlay, sec);
+            renderSidebarView();
+            updatePlayerUI();
+        } else {
+            this.mechState = 'IDLE_STOPPED';
+        }
+        this._needsRender = true;
+    }
+
     triggerTrackChange(track, autoPlay = true, startSec = 0) {
         if (!track) return;
+        this._clearBgSwapTimers();
         this.cueLowering = false;
         this.pendingTrack = track;
         this.pendingAutoPlay = autoPlay;
         this.pendingStartSec = startSec;
+        this._rafTicksSinceTrigger = 0;
         this._needsRender = true;
+
+        // If the document is already hidden (minimized), skip 3D cueing animation and start audio immediately
+        if (typeof document !== 'undefined' && document.hidden) {
+            audioEngine.stopAllAudioOnly();
+            this._completePendingTrackImmediately();
+            return;
+        }
 
         if (this.mechState === 'IDLE_STOPPED') {
             this.updateRecordLabel(track);
@@ -1520,6 +1581,24 @@ export class Turntable3D {
             }
             audioEngine.stopAllAudioOnly();
             this.mechState = 'SWAPPING_OUT';
+        }
+
+        // On GNOME/Wayland (or occluded windows), switching workspaces suspends requestAnimationFrame
+        // even when document.hidden is false. Detect stalled rAF within 200ms and start audio immediately.
+        if (autoPlay) {
+            this._bgCheckTimer = setTimeout(() => {
+                this._bgCheckTimer = null;
+                if (this.pendingTrack && (this._rafTicksSinceTrigger < 2 || (typeof document !== 'undefined' && document.hidden))) {
+                    this._completePendingTrackImmediately();
+                }
+            }, 200);
+
+            this._bgMaxTimer = setTimeout(() => {
+                this._bgMaxTimer = null;
+                if (this.pendingTrack) {
+                    this._completePendingTrackImmediately();
+                }
+            }, 1800);
         }
     }
 
@@ -1589,6 +1668,8 @@ export class Turntable3D {
             if (!document.hidden) {
                 this.clock.getDelta(); // Reset delta after background pause
                 this._needsRender = true;
+            } else if (this.pendingTrack && this.pendingAutoPlay) {
+                this._completePendingTrackImmediately();
             }
         };
         window.addEventListener('resize', this._onWindowResize);
@@ -1600,6 +1681,7 @@ export class Turntable3D {
             return;
         }
 
+        this._rafTicksSinceTrigger = (this._rafTicksSinceTrigger || 0) + 1;
         const dt = Math.min(this.clock.getDelta(), 0.1);
         const elapsed = this.clock.getElapsedTime();
 
@@ -1702,6 +1784,7 @@ export class Turntable3D {
                 } else {
                     this.armPitch += (0.0044 - this.armPitch) * 7 * dt;
                     if (this.armPitch < 0.012) {
+                        this._clearBgSwapTimers();
                         audioEngine.playNeedleDropSound();
                         this.cueLowering = false;
                         this.mechState = 'PLAYING';
@@ -2091,6 +2174,7 @@ export class Turntable3D {
     }
 
     dispose() {
+        this._clearBgSwapTimers();
         if (this._onWindowResize) {
             window.removeEventListener('resize', this._onWindowResize);
         }
