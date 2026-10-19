@@ -51,5 +51,6 @@ contextBridge.exposeInMainWorld('spindleDesktop', {
         const handler = (_event, isMax) => callback(isMax);
         ipcRenderer.on('spindle:window-maximized-change', handler);
         return () => ipcRenderer.removeListener('spindle:window-maximized-change', handler);
-    }
+    },
+    saveThemePreference: (theme) => ipcRenderer.invoke('spindle:save-theme-preference', theme)
 });

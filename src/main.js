@@ -180,9 +180,11 @@ async function initApp() {
         }
 
         if (persist) {
+            const mode = AppState.isDarkMode ? 'dark' : 'light';
             try {
-                localStorage.setItem('spindle:theme', AppState.isDarkMode ? 'dark' : 'light');
+                localStorage.setItem('spindle:theme', mode);
             } catch (_) {}
+            window.spindleDesktop?.saveThemePreference?.(mode);
         }
     };
 

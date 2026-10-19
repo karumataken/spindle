@@ -227,18 +227,40 @@ function fetchLatestRelease() {
     });
 }
 
+function getSavedThemePreference() {
+    try {
+        const settingsPath = path.join(app.getPath('userData'), 'theme-preference.json');
+        if (fs.existsSync(settingsPath)) {
+            const data = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+            if (data && data.theme === 'dark') return 'dark';
+        }
+    } catch (_) {}
+    return 'light';
+}
+
+function saveThemePreference(theme) {
+    try {
+        const settingsPath = path.join(app.getPath('userData'), 'theme-preference.json');
+        fs.writeFileSync(settingsPath, JSON.stringify({ theme }), 'utf8');
+    } catch (_) {}
+}
+
 function createWindow() {
     app.setName('Spindle');
     const iconPath = path.join(__dirname, '../build/icon.png');
+    const initialTheme = getSavedThemePreference();
+    const isDark = initialTheme === 'dark';
+
     mainWindow = new BrowserWindow({
         width: 1320,
         height: 860,
         minWidth: 920,
         minHeight: 640,
-        backgroundColor: '#F6F4F0',
+        backgroundColor: isDark ? '#211E1B' : '#F6F4F0',
         title: 'Spindle',
         frame: false,
         titleBarStyle: 'hidden',
+        show: false,
         icon: fs.existsSync(iconPath) ? iconPath : undefined,
         autoHideMenuBar: true,
         webPreferences: {
@@ -248,6 +270,12 @@ function createWindow() {
             sandbox: true,
             webSecurity: true,
             backgroundThrottling: false
+        }
+    });
+
+    mainWindow.once('ready-to-show', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show();
         }
     });
 
@@ -1272,5 +1300,13 @@ ipcMain.handle('spindle:window-close', () => {
 
 ipcMain.handle('spindle:window-is-maximized', () => {
     return mainWindow && !mainWindow.isDestroyed() ? mainWindow.isMaximized() : false;
+});
+
+ipcMain.handle('spindle:save-theme-preference', (_event, theme) => {
+    saveThemePreference(theme === 'dark' ? 'dark' : 'light');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.setBackgroundColor(theme === 'dark' ? '#211E1B' : '#F6F4F0');
+    }
+    return true;
 });
 
