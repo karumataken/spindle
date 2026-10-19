@@ -2045,7 +2045,7 @@ export function showUpdateModal(info) {
 }
 
 export async function showAboutModal() {
-    let currentVer = '1.0.0';
+    let currentVer = '1.0.1';
     if (window.spindleDesktop?.getAppVersion) {
         try { currentVer = await window.spindleDesktop.getAppVersion(); } catch (_) {}
     }

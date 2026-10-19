@@ -1,7 +1,7 @@
 {
   "name": "spindle-music-player",
   "productName": "Spindle",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Tactile retro vinyl record player and music manager in the browser",
   "type": "module",
   "main": "electron/main.cjs",
