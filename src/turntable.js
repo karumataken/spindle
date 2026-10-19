@@ -358,17 +358,17 @@ export class Turntable3D {
         ctx.fillStyle = '#141210';
         ctx.fillRect(0, 0, 512, 96);
 
-        ctx.strokeStyle = '#C8A248';
+        ctx.strokeStyle = '#B8B4AA';
         ctx.lineWidth = 4;
         ctx.strokeRect(6, 6, 500, 84);
 
-        ctx.fillStyle = '#DFB858';
+        ctx.fillStyle = '#EAE6DE';
         ctx.font = 'bold 34px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
         ctx.letterSpacing = '6px';
         ctx.fillText('CHRONO-FIDELITY', 256, 52);
 
-        ctx.fillStyle = '#A09070';
+        ctx.fillStyle = '#9E9A90';
         ctx.font = '14px "JetBrains Mono", monospace';
         ctx.fillText('DIRECT DRIVE TURNTABLE SYSTEM', 256, 76);
 
@@ -635,11 +635,13 @@ export class Turntable3D {
             metalness: 0.88
         });
 
-        const brassMat = new THREE.MeshStandardMaterial({
-            color: 0xE2BA4C,
-            roughness: 0.16,
-            metalness: 0.94
+        // Refined Satin Brushed Titanium / Nickel - soft, warm, easy on the eyes
+        const accentMat = new THREE.MeshStandardMaterial({
+            color: 0xC8C4BA,
+            roughness: 0.22,
+            metalness: 0.86
         });
+        const brassMat = accentMat;
 
         const darkMat = new THREE.MeshStandardMaterial({
             color: 0x181614,
@@ -714,8 +716,8 @@ export class Turntable3D {
         subSkirt.position.y = -0.30;
         this.turntableGroup.add(subSkirt);
 
-        // Front Engraved Brass & Anodized Nameplate Badge
-        const badgeTrim = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.18, 0.025), brassMat);
+        // Front Engraved Titanium & Anodized Nameplate Badge
+        const badgeTrim = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.18, 0.025), accentMat);
         badgeTrim.position.set(0, 0.02, 2.095);
         this.turntableGroup.add(badgeTrim);
 
@@ -798,7 +800,7 @@ export class Turntable3D {
             footAlumSkirt.position.set(fx, fy + 0.03, fz);
             this.turntableGroup.add(footAlumSkirt);
 
-            const collar = new THREE.Mesh(footCollarGeo, brassMat);
+            const collar = new THREE.Mesh(footCollarGeo, accentMat);
             collar.position.set(fx, fy + 0.065, fz);
             this.turntableGroup.add(collar);
         });
@@ -864,7 +866,7 @@ export class Turntable3D {
             this.platterGroup.add(gripRing);
         });
 
-        // Precision Center Spindle & Brass Bearing Shoulder
+        // Precision Center Spindle & Titanium Bearing Shoulder
         const spindleCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, 0.025, 32), machinedAlumMat);
         spindleCollar.position.y = 0.096;
         this.platterGroup.add(spindleCollar);
@@ -920,7 +922,7 @@ export class Turntable3D {
         recordOuterBead.scale.z = 0.35;
         this.recordGroup.add(recordOuterBead);
 
-        const spindleBushing = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.030, 32), brassMat);
+        const spindleBushing = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.030, 32), accentMat);
         spindleBushing.position.y = 0.004;
         this.recordGroup.add(spindleBushing);
 
@@ -941,7 +943,7 @@ export class Turntable3D {
         armBaseRing.position.set(armBasePos.x, armBasePos.y + 0.07, armBasePos.z);
         this.turntableGroup.add(armBaseRing);
 
-        const vtaLockLever = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.05), brassMat);
+        const vtaLockLever = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.035, 0.05), accentMat);
         vtaLockLever.position.set(armBasePos.x - 0.38, armBasePos.y + 0.04, armBasePos.z - 0.18);
         vtaLockLever.rotation.y = 0.45;
         this.turntableGroup.add(vtaLockLever);
@@ -963,7 +965,7 @@ export class Turntable3D {
         antiSkateKnob.position.set(armBasePos.x + 0.31, armBasePos.y + 0.12, armBasePos.z + 0.08);
         this.turntableGroup.add(antiSkateKnob);
 
-        const antiSkateCap = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.06, 24), brassMat);
+        const antiSkateCap = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.06, 24), accentMat);
         antiSkateCap.position.set(armBasePos.x + 0.31, armBasePos.y + 0.122, armBasePos.z + 0.08);
         this.turntableGroup.add(antiSkateCap);
 
@@ -972,7 +974,7 @@ export class Turntable3D {
         cueCylinder.position.set(armBasePos.x - 0.24, armBasePos.y + 0.14, armBasePos.z + 0.28);
         this.turntableGroup.add(cueCylinder);
 
-        const cuePiston = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.12, 16), brassMat);
+        const cuePiston = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.12, 16), chromeMat);
         cuePiston.position.set(armBasePos.x - 0.24, armBasePos.y + 0.22, armBasePos.z + 0.28);
         this.turntableGroup.add(cuePiston);
 
@@ -1015,7 +1017,7 @@ export class Turntable3D {
 
         // Side gimbal bearing screws
         [-0.188, 0.188].forEach(px => {
-            const sideBearing = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 16), brassMat);
+            const sideBearing = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.02, 16), accentMat);
             sideBearing.rotation.z = Math.PI / 2;
             sideBearing.position.set(px, 0.0, 0);
             this.tonearmYawGroup.add(sideBearing);
@@ -1026,7 +1028,7 @@ export class Turntable3D {
         gimbalBridge.castShadow = true;
         this.tonearmYawGroup.add(gimbalBridge);
 
-        const topPivotScrew = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.045, 20), brassMat);
+        const topPivotScrew = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.045, 20), accentMat);
         topPivotScrew.position.set(0, 0.19, 0);
         this.tonearmYawGroup.add(topPivotScrew);
 
@@ -1047,7 +1049,7 @@ export class Turntable3D {
         this.tonearmPitchGroup = new THREE.Group();
         this.tonearmYawGroup.add(this.tonearmPitchGroup);
 
-        const innerGimbal = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.18, 28), brassMat);
+        const innerGimbal = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.18, 28), accentMat);
         innerGimbal.rotation.z = Math.PI / 2;
         this.tonearmPitchGroup.add(innerGimbal);
 
@@ -1113,10 +1115,10 @@ export class Turntable3D {
         weightScaleRing.position.z = -0.225;
         this.tonearmPitchGroup.add(weightScaleRing);
 
-        const weightBrassTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.168, 0.04, 36), brassMat);
-        weightBrassTrim.rotation.x = Math.PI / 2;
-        weightBrassTrim.position.z = -0.48;
-        this.tonearmPitchGroup.add(weightBrassTrim);
+        const weightAccentTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.145, 0.168, 0.04, 36), accentMat);
+        weightAccentTrim.rotation.x = Math.PI / 2;
+        weightAccentTrim.position.z = -0.48;
+        this.tonearmPitchGroup.add(weightAccentTrim);
 
         // Perforated Die-Cast Headshell & Moving-Coil Cartridge
         const headshellGroup = new THREE.Group();
@@ -1148,9 +1150,9 @@ export class Turntable3D {
             });
         });
 
-        // Dual slotted cartridge mounting screws + brass nuts
+        // Dual slotted cartridge mounting screws + aluminum nuts
         [-0.048, 0.048].forEach(sx => {
-            const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.016, 16), brassMat);
+            const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.016, 16), machinedAlumMat);
             screw.position.set(sx, 0.030, 0.255);
             headshellGroup.add(screw);
         });
@@ -1191,7 +1193,7 @@ export class Turntable3D {
         cartridgeBody.castShadow = true;
         headshellGroup.add(cartridgeBody);
 
-        const stylusGuard = new THREE.Mesh(new THREE.BoxGeometry(0.146, 0.038, 0.065), brassMat);
+        const stylusGuard = new THREE.Mesh(new THREE.BoxGeometry(0.146, 0.038, 0.065), darkMat);
         stylusGuard.position.set(0, -0.076, 0.295);
         headshellGroup.add(stylusGuard);
 
@@ -1230,28 +1232,36 @@ export class Turntable3D {
         this.tonearmPitchGroup.add(tonearmHitbox);
         this.tonearmHitbox = tonearmHitbox;
 
-        // 6. Tonearm Rest Post, U-Cradle & Flip Lock Latch
+        // 6. Tonearm Rest Post, Y-Cradle & Flip Lock Latch
         const restBase = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.075, 0.03, 20), machinedAlumMat);
-        restBase.position.set(1.65, 0.33, 0.25);
+        restBase.position.set(1.776, 0.33, 0.25);
         this.turntableGroup.add(restBase);
 
-        const restPost = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.042, 0.24, 20), darkMat);
-        restPost.position.set(1.65, 0.42, 0.25);
+        const restPost = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.040, 0.22, 20), darkMat);
+        restPost.position.set(1.776, 0.435, 0.25);
         this.turntableGroup.add(restPost);
 
-        const restCradleBase = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.022, 0.075), brassMat);
-        restCradleBase.position.set(1.65, 0.535, 0.25);
+        const restCradleBase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.024, 0.075), darkMat);
+        restCradleBase.position.set(1.776, 0.556, 0.25);
         this.turntableGroup.add(restCradleBase);
 
-        [-0.052, 0.052].forEach(cx => {
-            const prong = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.055, 0.075), brassMat);
-            prong.position.set(1.65 + cx, 0.568, 0.25);
-            this.turntableGroup.add(prong);
-        });
+        const restRubberPad = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.008, 0.070), rubberMat);
+        restRubberPad.position.set(1.776, 0.568, 0.25);
+        this.turntableGroup.add(restRubberPad);
 
-        const restLockClip = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.065, 0.045), darkMat);
-        restLockClip.position.set(1.59, 0.585, 0.25);
-        restLockClip.rotation.z = -0.35;
+        const leftProng = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.065, 0.075), darkMat);
+        leftProng.position.set(1.776 - 0.044, 0.600, 0.25);
+        leftProng.rotation.z = 0.12;
+        this.turntableGroup.add(leftProng);
+
+        const rightProng = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.065, 0.075), darkMat);
+        rightProng.position.set(1.776 + 0.044, 0.600, 0.25);
+        rightProng.rotation.z = -0.12;
+        this.turntableGroup.add(rightProng);
+
+        const restLockClip = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.055, 0.045), darkMat);
+        restLockClip.position.set(1.776 - 0.046, 0.628, 0.25);
+        restLockClip.rotation.z = -0.42;
         this.turntableGroup.add(restLockClip);
 
         // 7. Front & Side Controls (Strobe Prism, Speed Switches, Target Light, Pitch Fader)
@@ -1355,7 +1365,7 @@ export class Turntable3D {
         knobEscutcheon.position.set(1.75, 0.324, 1.48);
         this.turntableGroup.add(knobEscutcheon);
 
-        const knobBase = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.09, 32), brassMat);
+        const knobBase = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.09, 32), accentMat);
         knobBase.position.set(1.75, 0.355, 1.48);
         knobBase.castShadow = true;
         this.turntableGroup.add(knobBase);
@@ -1384,7 +1394,7 @@ export class Turntable3D {
             hingeClip.position.set(hx, 0.42, -1.92);
             this.turntableGroup.add(hingeClip);
 
-            const hingePin = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.28, 16), brassMat);
+            const hingePin = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.28, 16), chromeMat);
             hingePin.rotation.z = Math.PI / 2;
             hingePin.position.set(hx, 0.44, -1.94);
             this.turntableGroup.add(hingePin);
@@ -1427,7 +1437,7 @@ export class Turntable3D {
             this.dustCoverGroup.add(bumper);
         });
 
-        const coverLiftTab = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.042, 0.065), brassMat);
+        const coverLiftTab = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.042, 0.065), machinedAlumMat);
         coverLiftTab.position.set(0, 0.05, 3.925);
         this.dustCoverGroup.add(coverLiftTab);
     }
