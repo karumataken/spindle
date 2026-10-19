@@ -1,102 +1,67 @@
 # 🎵 Spindle
 
 <div align="center">
-  <p><strong>A tactile, analog-inspired desktop vinyl player and offline music manager.</strong></p>
+  <p><strong>A tactile, analog-inspired desktop vinyl record player and offline music manager.</strong></p>
+  
+  <br>
+
+  <img src="showcase.png" alt="Spindle Showcase" width="850">
+
+  <br><br>
+
   <p>
+    <a href="https://github.com/karumataken/spindle/releases"><strong>Download Releases</strong></a> •
+    <a href="#about-the-project">About</a> •
     <a href="#features">Features</a> •
-    <a href="#tech-stack">Tech Stack</a> •
-    <a href="#getting-started">Getting Started</a> •
-    <a href="#building--packaging">Packaging</a> •
-    <a href="#license">License</a>
+    <a href="#running-from-source">Run from Source</a>
   </p>
 </div>
 
 ---
 
-## ✨ Features
+### 📦 Downloads
 
-- **Interactive 3D Turntable:** Real-time WebGL/Three.js turntable simulation with a spinning vinyl disc, moving tonearm mechanics, smooth playback needle drops, and realistic groove animations.
-- **Local Music Management:** Drag and drop your audio files (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`) or import directly into playlists.
-- **YouTube & YouTube Music Integration:**
-  - Background track and album downloading via `yt-dlp` and `ffmpeg`.
-  - Fast background metadata discovery with automatic naming and cover extraction.
-  - Authentic high-resolution album artwork inheritance for YouTube Music releases.
-- **Dynamic Procedural Vinyl Labels:** Procedurally styled records with customizable vinyl label palettes and custom uploaded artwork support.
-- **Persistent Offline Library:** Zero-cloud dependency; audio tracks and playlists are stored directly in your local IndexedDB storage and music directory.
-- **Refined Retro Aesthetic:** Warm editorial typography, vintage warm-paper and espresso color palettes, and tactile micro-interactions.
+Pre-built releases for **Linux** (`.AppImage`, `.rpm`) and **Windows** (`.exe`) are available directly on the [**Releases Page**](https://github.com/karumataken/spindle/releases).
 
 ---
 
-## 🛠 Tech Stack
+### 💡 About the Project
 
-- **Desktop Framework:** [Electron](https://www.electronjs.org/)
-- **Frontend / Bundler:** Vanilla JavaScript (ES Modules), [Vite](https://vitejs.dev/)
-- **3D Graphics:** [Three.js](https://threejs.org/) (Custom WebGL Turntable & Tonearm Rig)
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-- **Media Pipeline:** `yt-dlp` + `ffmpeg`
+> [!NOTE]
+> **Spindle** is an experimental hobby project **vibe-coded with Gemini**. Any feedback, suggestions, issues, or ideas are warmly welcome! Feel free to open an issue or start a discussion.
 
 ---
 
-## 🚀 Getting Started
+### ✨ Features
 
-### Prerequisites
-
-- **Node.js** (v18+ recommended)
-- **npm**
-- **yt-dlp** and **ffmpeg** (for YouTube audio downloads):
-  - **Fedora / RHEL:** `sudo dnf install ffmpeg yt-dlp`
-  - **Ubuntu / Debian:** `sudo apt install ffmpeg yt-dlp`
-  - **macOS:** `brew install ffmpeg yt-dlp`
-  - **Windows:** Install via `winget install yt-dlp ffmpeg` or place binaries in your system PATH.
-
-### Installation
-
-1. Clone your repository:
-   ```bash
-   git clone https://github.com/karumataken/spindle.git
-   cd spindle
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-### Running the App
-
-- **Run Desktop App (Electron):**
-  ```bash
-  npm run dev:desktop
-  ```
-
-- **Run Web Frontend (Browser preview without desktop IPC):**
-  ```bash
-  npm run dev
-  ```
+- **Interactive 3D Turntable:** Real-time WebGL/Three.js vinyl simulation with spinning records, tonearm tracking, and mechanical needle drops.
+- **Offline Music Library:** Drag & drop local audio files (`.mp3`, `.wav`, `.ogg`, `.flac`, `.m4a`) or organize into custom playlists stored locally.
+- **YouTube & YouTube Music Import:** Paste a link to stream/download tracks or entire albums directly into playlists with authentic artwork.
+- **Procedural Vinyl Records:** Distinct procedural vinyl discs, center labels, and color palettes that pair with every track.
+- **Analog Aesthetic:** Warm editorial typography and retro design built for a distraction-free listening experience.
 
 ---
 
-## 📦 Building & Packaging
+### 🚀 Running from Source
 
-Create standalone production packages with electron-builder:
+#### Prerequisites
+- **Node.js** (v18+)
+- **yt-dlp** & **ffmpeg** (for audio downloading):
+  - *Fedora:* `sudo dnf install ffmpeg yt-dlp`
+  - *Ubuntu / Debian:* `sudo apt install ffmpeg yt-dlp`
+  - *macOS:* `brew install ffmpeg yt-dlp`
+  - *Windows:* `winget install yt-dlp ffmpeg`
 
-- **Linux AppImage:**
-  ```bash
-  npm run dist:linux
-  ```
-- **Windows Installer / Portable (`.exe`):**
-  ```bash
-  npm run dist:win
-  ```
-- **Platform Default:**
-  ```bash
-  npm run dist
-  ```
-
-Outputs will be saved in the `release/` directory.
+#### Setup
+```bash
+git clone https://github.com/karumataken/spindle.git
+cd spindle
+npm install
+npm run dev:desktop
+```
 
 ---
 
-## 📄 License
+### 📄 License
 
-This project is licensed under the [ISC License](LICENSE).
+[ISC](LICENSE)

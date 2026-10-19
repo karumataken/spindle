@@ -29,7 +29,8 @@
     ],
     "linux": {
       "target": [
-        "AppImage"
+        "AppImage",
+        "rpm"
       ],
       "category": "AudioVideo",
       "icon": "build/icon.png"
