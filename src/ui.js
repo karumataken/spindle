@@ -145,6 +145,7 @@ export function cleanPlaylistTitle(title) {
 
 export function upgradeArtworkUrl(url) {
     if (!url || typeof url !== 'string') return url;
+    if (isPlaceholderArt(url)) return null;
     return url.replace(/\/vi(?:_webp)?\/([a-zA-Z0-9_-]+)\/(?:hqdefault|mqdefault|sddefault|default)\.jpg(?:\?.*)?/, '/vi/$1/maxresdefault.jpg');
 }
 
@@ -157,7 +158,19 @@ export function isPlaceholderArt(url) {
     if (lower.includes('placeholder')) return true;
     if (lower.includes('desktop/unavailable')) return true;
     if (lower.includes('default_playlist')) return true;
+    if (lower.includes('empty_playlist')) return true;
     if (lower.includes('/vi//')) return true;
+    // Any /s_p/ thumbnail without a signed ?sqp= parameter is a broken phantom URL that returns YouTube's 404 placeholder
+    if (lower.includes('/s_p/') && !lower.includes('sqp=')) {
+        return true;
+    }
+    const viMatch = url.match(/\/vi(?:_webp)?\/([^/?#]+)/);
+    if (viMatch) {
+        const id = viMatch[1];
+        if (id.length !== 11 || id.startsWith('PL') || id.startsWith('RD') || id.startsWith('UU') || id.startsWith('FL') || id.startsWith('OLAK')) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -331,30 +344,11 @@ export function renderSidebarView() {
         document.getElementById('hero-playlist-meta').textContent = `${pl.trackIds.length} ${pl.trackIds.length === 1 ? 'song' : 'songs'} • ${formatTotalDuration(pl.trackIds)}`;
 
         const heroArt = document.getElementById('hero-playlist-artwork');
-        let displayArtwork = (!isPlaceholderArt(pl.artwork)) ? upgradeArtworkUrl(pl.artwork) : null;
-        if (!displayArtwork && Array.isArray(pl.trackIds)) {
-            for (const tid of pl.trackIds) {
-                const t = AppState.tracksById[tid];
-                if (t) {
-                    if (t.artwork && !isPlaceholderArt(t.artwork)) {
-                        displayArtwork = upgradeArtworkUrl(t.artwork);
-                        pl.artwork = displayArtwork;
-                        persistState();
-                        break;
-                    }
-                    if (t.ytId && t.ytId !== 'fallback') {
-                        displayArtwork = `https://i.ytimg.com/vi/${t.ytId}/maxresdefault.jpg`;
-                        pl.artwork = displayArtwork;
-                        persistState();
-                        break;
-                    }
-                }
-            }
-        }
+        const displayArtwork = (!isPlaceholderArt(pl.artwork)) ? upgradeArtworkUrl(pl.artwork) : null;
 
         if (displayArtwork) {
             heroArt.classList.remove('bg-espresso');
-            heroArt.innerHTML = `<img src="${displayArtwork}" class="absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.onerror=null; this.parentElement.classList.add('bg-espresso'); this.parentElement.innerHTML=\`${getHeroFallbackDiscHtml(pl).replace(/`/g, '\\`')}\`; }">`;
+            heroArt.innerHTML = `<img src="${displayArtwork}" class="absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block" alt="" onerror="this.onerror=null; this.parentElement.classList.add('bg-espresso'); this.parentElement.innerHTML=\`${getHeroFallbackDiscHtml(pl).replace(/`/g, '\\`')}\`;">`;
         } else {
             heroArt.classList.add('bg-espresso');
             heroArt.innerHTML = getHeroFallbackDiscHtml(pl);
@@ -394,27 +388,12 @@ export function createPlaylistRow(pl) {
             : 'bg-transparent border-transparent hover:bg-alabaster/60 hover:border-stone/40'
     }`;
 
-    let rowArt = (!isPlaceholderArt(pl.artwork)) ? upgradeArtworkUrl(pl.artwork) : null;
-    if (!rowArt && Array.isArray(pl.trackIds)) {
-        for (const tid of pl.trackIds) {
-            const t = AppState.tracksById[tid];
-            if (t) {
-                if (t.artwork && !isPlaceholderArt(t.artwork)) {
-                    rowArt = upgradeArtworkUrl(t.artwork);
-                    break;
-                }
-                if (t.ytId && t.ytId !== 'fallback') {
-                    rowArt = `https://i.ytimg.com/vi/${t.ytId}/maxresdefault.jpg`;
-                    break;
-                }
-            }
-        }
-    }
+    const rowArt = (!isPlaceholderArt(pl.artwork)) ? upgradeArtworkUrl(pl.artwork) : null;
 
     const plColor = sanitizeColor(pl.color, '#C85A32');
     const artworkHtml = rowArt
         ? `<div class="w-10 h-10 rounded-xl overflow-hidden shrink-0 relative border border-stone">
-            <img src="${rowArt}" class="absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block" alt="" onerror="if (this.src.includes('maxresdefault.jpg')) { this.src = this.src.replace('maxresdefault.jpg', 'hq720.jpg'); } else if (this.src.includes('hq720.jpg')) { this.src = this.src.replace('hq720.jpg', 'hqdefault.jpg'); } else { this.parentElement.style.display='none'; }">
+            <img src="${rowArt}" class="absolute inset-0 w-full h-full object-cover object-center scale-[1.04] block" alt="" onerror="this.onerror=null; this.parentElement.innerHTML=\`<div class='w-7 h-7 rounded-full flex items-center justify-center' style='background: radial-gradient(circle, ${plColor} 0%, ${plColor} 35%, #1E1B18 38%, #1E1B18 100%);'><div class='w-1.5 h-1.5 rounded-full bg-alabaster'></div></div>\`; this.parentElement.classList.add('bg-espresso');">
            </div>`
         : `<div class="w-10 h-10 rounded-xl bg-espresso flex items-center justify-center shrink-0 relative border border-stone">
             <div class="w-7 h-7 rounded-full flex items-center justify-center" style="background: radial-gradient(circle, ${plColor} 0%, ${plColor} 35%, #1E1B18 38%, #1E1B18 100%);">
@@ -535,6 +514,23 @@ export function renderPlaylistsOverviewList() {
 
     // Normal overview (no search active)
     if (!query) {
+        if (AppState.playlists.length === 0) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center py-16 px-6 h-full select-none">
+                    <div class="w-14 h-14 rounded-2xl bg-oatmeal/80 border border-stone/60 flex items-center justify-center text-espresso/60 mb-4 shadow-sm">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                        </svg>
+                    </div>
+                    <h3 class="font-serif text-lg font-semibold text-espresso mb-1.5">No playlists yet</h3>
+                    <p class="text-xs text-muted max-w-xs leading-relaxed">
+                        There are no playlists in your library. Get started by creating a playlist with the option at the top.
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
         AppState.playlists.forEach((pl) => {
             container.appendChild(createPlaylistRow(pl));
         });
@@ -950,19 +946,6 @@ export function openPlaylistContextMenu(triggerBtn, playlist) {
 }
 
 export function showConfirmDeletePlaylistModal(playlist) {
-    if (AppState.playlists.length <= 1) {
-        openModal('Cannot Delete', `
-            <div class="space-y-4">
-                <p class="text-sm text-espresso font-sans">You must keep at least one playlist in Spindle.</p>
-                <div class="pt-2 flex justify-end">
-                    <button type="button" id="btn-close-alert" class="px-5 py-2 rounded-xl bg-espresso text-alabaster text-xs font-medium transition">OK</button>
-                </div>
-            </div>
-        `);
-        document.getElementById('btn-close-alert').onclick = closeModal;
-        return;
-    }
-
     const modalBody = document.getElementById('modal-body');
     openModal('Delete Playlist', `
         <div class="space-y-4">
@@ -1040,10 +1023,6 @@ export function openSongContextMenu(triggerBtn, playlist, track, index) {
 }
 
 export async function removePlaylist(playlistId) {
-    if (AppState.playlists.length <= 1) {
-        alert('You must keep at least one playlist.');
-        return;
-    }
     const idx = AppState.playlists.findIndex(p => p.id === playlistId);
     if (idx === -1) return;
 
@@ -1080,7 +1059,7 @@ export async function removePlaylist(playlistId) {
     for (const tid of pl.trackIds) {
         if (!otherTrackIds.has(tid)) {
             const track = AppState.tracksById[tid];
-            if (track && !track.isSynth) {
+            if (track) {
                 try {
                     await storageDB.deleteAudioBlob(tid);
                 } catch (e) {
@@ -1136,7 +1115,7 @@ export async function removeSongFromPlaylist(playlistId, songIndex) {
         );
         if (!stillReferenced) {
             const track = AppState.tracksById[removedTrackId];
-            if (track && !track.isSynth) {
+            if (track) {
                 try {
                     await storageDB.deleteAudioBlob(removedTrackId);
                 } catch (e) {
@@ -1285,7 +1264,8 @@ export function showCreatePlaylistModal() {
             startBackgroundImport({
                 url,
                 targetPlaylistId: newPl.id,
-                playlistName: name
+                playlistName: name,
+                fromCreation: true
             });
         }
     };
@@ -1525,19 +1505,18 @@ export function showAddSongsModal(playlistId) {
             </div>
 
             <div>
-                <label class="block font-mono text-[11px] uppercase text-muted mb-2">Or Add from Library</label>
-                <div class="max-h-52 overflow-y-auto space-y-1.5 pr-1">
-                    ${allTracks.map(t => `
-                        <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-alabaster border border-stone/60">
-                            <div class="min-w-0 flex-1 pr-2">
-                                <p class="text-xs font-medium text-espresso truncate">${escapeHtml(t.title)}</p>
-                                <p class="text-[11px] text-muted truncate">${escapeHtml(t.artist)} • ${formatTime(t.duration)}</p>
-                            </div>
-                            <button type="button" data-track-id="${t.id}" class="btn-add-existing px-2.5 py-1 rounded-lg text-[11px] font-mono bg-oatmeal hover:bg-terracotta hover:text-alabaster text-espresso transition">
-                                + Add
-                            </button>
-                        </div>
-                    `).join('')}
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block font-mono text-[11px] uppercase text-muted">Or Add from Library</label>
+                    <span id="library-count-label" class="font-mono text-[11px] text-muted">${allTracks.length} ${allTracks.length === 1 ? 'song' : 'songs'}</span>
+                </div>
+                <div class="relative mb-2">
+                    <input id="input-search-library" type="text" placeholder="Search songs or artists in library..." class="w-full px-3 py-1.5 pl-8 rounded-xl bg-alabaster border border-stone text-xs text-espresso focus:outline-none focus:border-terracotta placeholder:text-muted/50" autocomplete="off" spellcheck="false" />
+                    <svg class="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <div id="library-track-list" class="max-h-52 overflow-y-auto space-y-1.5 pr-1">
+                    <!-- Populated dynamically via JS -->
                 </div>
             </div>
 
@@ -1546,6 +1525,68 @@ export function showAddSongsModal(playlistId) {
             </div>
         </div>
     `);
+
+    const libraryListEl = modalBody.querySelector('#library-track-list');
+    const librarySearchInput = modalBody.querySelector('#input-search-library');
+
+    const renderLibraryItems = (q = '') => {
+        const query = q.trim().toLowerCase();
+        const filtered = allTracks.filter(t => {
+            if (!query) return true;
+            return (t.title && t.title.toLowerCase().includes(query)) ||
+                   (t.artist && t.artist.toLowerCase().includes(query));
+        });
+
+        if (allTracks.length === 0) {
+            libraryListEl.innerHTML = `<p class="text-xs text-muted py-4 text-center">No other songs in your library yet.</p>`;
+            return;
+        }
+
+        if (filtered.length === 0) {
+            libraryListEl.innerHTML = `<p class="text-xs text-muted py-4 text-center">No songs matching "${escapeHtml(q)}"</p>`;
+            return;
+        }
+
+        libraryListEl.innerHTML = filtered.map(t => {
+            const alreadyInPl = Array.isArray(pl.trackIds) && pl.trackIds.includes(t.id);
+            return `
+                <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-alabaster border border-stone/60">
+                    <div class="min-w-0 flex-1 pr-2">
+                        <p class="text-xs font-medium text-espresso truncate">${escapeHtml(t.title)}</p>
+                        <p class="text-[11px] text-muted truncate">${escapeHtml(t.artist)} • ${formatTime(t.duration)}</p>
+                    </div>
+                    <button type="button" data-track-id="${t.id}" class="btn-add-existing px-2.5 py-1 rounded-lg text-[11px] font-mono transition ${
+                        alreadyInPl
+                            ? 'bg-stone/50 text-muted cursor-default'
+                            : 'bg-oatmeal hover:bg-terracotta hover:text-alabaster text-espresso active:scale-95'
+                    }">
+                        ${alreadyInPl ? 'In Playlist ✓' : '+ Add'}
+                    </button>
+                </div>
+            `;
+        }).join('');
+
+        libraryListEl.querySelectorAll('.btn-add-existing').forEach(btn => {
+            btn.onclick = () => {
+                const tid = btn.dataset.trackId;
+                if (!pl.trackIds.includes(tid)) {
+                    pl.trackIds.push(tid);
+                    btn.textContent = 'Added ✓';
+                    btn.className = 'btn-add-existing px-2.5 py-1 rounded-lg text-[11px] font-mono bg-stone/50 text-muted cursor-default';
+                    persistState();
+                    renderSidebarView();
+                }
+            };
+        });
+    };
+
+    renderLibraryItems();
+
+    if (librarySearchInput) {
+        librarySearchInput.addEventListener('input', (e) => {
+            renderLibraryItems(e.target.value);
+        });
+    }
 
     const triggerImport = () => {
         const urlInput = modalBody.querySelector('#input-modal-yt-url');
@@ -1559,7 +1600,6 @@ export function showAddSongsModal(playlistId) {
             title: 'Importing track...',
             artist: 'YouTube',
             duration: 180,
-            isSynth: false,
             isDownloading: true,
             url: null,
             labelColor: palette.label,
@@ -1589,15 +1629,6 @@ export function showAddSongsModal(playlistId) {
         closeModal();
         document.getElementById('file-upload-audio').click();
     };
-
-    modalBody.querySelectorAll('.btn-add-existing').forEach(btn => {
-        btn.onclick = () => {
-            pl.trackIds.push(btn.dataset.trackId);
-            btn.textContent = 'Added ✓';
-            persistState();
-            renderSidebarView();
-        };
-    });
 
     modalBody.querySelector('#btn-done-adding').onclick = closeModal;
 }
@@ -1808,8 +1839,19 @@ export async function handleLocalFiles(fileList, targetPlaylistId = null) {
     );
     if (validFiles.length === 0) return;
 
-    const destPlId = targetPlaylistId || AppState.viewedPlaylistId || AppState.playingPlaylistId || AppState.playlists[0].id;
-    const destPl = AppState.playlists.find(p => p.id === destPlId) || AppState.playlists[0];
+    const destPlId = targetPlaylistId || AppState.viewedPlaylistId || AppState.playingPlaylistId || (AppState.playlists[0] ? AppState.playlists[0].id : null);
+    let destPl = AppState.playlists.find(p => p.id === destPlId) || AppState.playlists[0];
+    if (!destPl) {
+        destPl = {
+            id: `pl-${Date.now()}`,
+            name: 'My Playlist',
+            color: VINYL_COLORS[0].label,
+            artwork: null,
+            trackIds: []
+        };
+        AppState.playlists.push(destPl);
+        AppState.viewedPlaylistId = destPl.id;
+    }
     const firstAddedIndex = destPl.trackIds.length;
 
     for (let i = 0; i < validFiles.length; i++) {
@@ -1826,15 +1868,10 @@ export async function handleLocalFiles(fileList, targetPlaylistId = null) {
             album: meta.album || null,
             artwork: meta.artwork || null,
             duration: 180,
-            isSynth: false,
             url,
             labelColor: palette.label,
             accentColor: palette.accent
         };
-
-        if (meta.artwork && (!destPl.artwork || isPlaceholderArt(destPl.artwork))) {
-            destPl.artwork = meta.artwork;
-        }
 
         AppState.tracksById[id] = newTrack;
         destPl.trackIds.push(id);

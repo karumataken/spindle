@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { DEFAULT_SYNTH_TRACKS } from './constants.js';
 import { AppState, getCurrentTrack, getViewedPlaylist } from './state.js';
 import { audioEngine } from './audio.js';
 import { formatTime, renderSidebarView, updatePlayerUI, stopPlayback } from './ui.js';

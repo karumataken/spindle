@@ -17,19 +17,16 @@ export function initDownloadManager() {
         const targetPl = AppState.playlists.find(p => p.id === targetPlaylistId);
         if (!targetPl) return;
 
-        // Auto-assign playlist artwork if not already custom set or if currently placeholder
-        const candidateArt = (!isPlaceholderArt(playlistThumbnail) ? upgradeArtworkUrl(playlistThumbnail) : null) ||
-                             (entries?.find(e => !isPlaceholderArt(e.thumbnail)) ? upgradeArtworkUrl(entries.find(e => !isPlaceholderArt(e.thumbnail)).thumbnail) : null) ||
-                             (!isPlaceholderArt(entry?.thumbnail) ? upgradeArtworkUrl(entry.thumbnail) : null) ||
-                             (entries?.[0]?.id ? `https://i.ytimg.com/vi/${entries[0].id}/maxresdefault.jpg` : null) ||
-                             (entry?.id ? `https://i.ytimg.com/vi/${entry.id}/maxresdefault.jpg` : null);
-
-        if (candidateArt && (!targetPl.artwork || isPlaceholderArt(targetPl.artwork))) {
-            targetPl.artwork = candidateArt;
-        }
-
-        const job = activeJobs.get(jobId) || { targetPlaylistId, placeholderIds: [] };
+        const job = activeJobs.get(jobId) || { targetPlaylistId, placeholderIds: [], fromCreation: false };
         activeJobs.set(jobId, job);
+
+        // Auto-assign playlist artwork ONLY during playlist creation if a true playlist thumbnail is present
+        if (job.fromCreation && (!targetPl.artwork || isPlaceholderArt(targetPl.artwork))) {
+            const truePlArt = (!isPlaceholderArt(playlistThumbnail)) ? upgradeArtworkUrl(playlistThumbnail) : null;
+            if (truePlArt) {
+                targetPl.artwork = truePlArt;
+            }
+        }
 
         const cleanedTitle = cleanPlaylistTitle(playlistTitle);
 
@@ -76,7 +73,6 @@ export function initDownloadManager() {
                         title: e.title || 'Track',
                         artist: e.artist || 'Unknown Artist',
                         duration: e.duration || 180,
-                        isSynth: false,
                         isDownloading: true,
                         url: null,
                         filePath: null,
@@ -116,7 +112,7 @@ export function initDownloadManager() {
             }
             const singleArt = (!isPlaceholderArt(entry.thumbnail) ? upgradeArtworkUrl(entry.thumbnail) : null) ||
                               (entry.id ? `https://i.ytimg.com/vi/${entry.id}/maxresdefault.jpg` : null);
-            if (singleArt && (!targetPl.artwork || isPlaceholderArt(targetPl.artwork))) {
+            if (job.fromCreation && singleArt && (!targetPl.artwork || isPlaceholderArt(targetPl.artwork))) {
                 targetPl.artwork = singleArt;
             }
 
@@ -142,7 +138,6 @@ export function initDownloadManager() {
                     title: entry.title,
                     artist: entry.artist,
                     duration: entry.duration || 180,
-                    isSynth: false,
                     isDownloading: true,
                     url: null,
                     filePath: null,
@@ -217,7 +212,6 @@ export function initDownloadManager() {
                 title: title || 'Track',
                 artist: artist || 'Unknown Artist',
                 duration: duration || 180,
-                isSynth: false,
                 isDownloading: false,
                 url,
                 filePath,
@@ -228,10 +222,6 @@ export function initDownloadManager() {
             targetPl.trackIds.push(trackId);
         }
 
-        const effectiveArt = trackThumb || track?.artwork;
-        if (effectiveArt && (!targetPl.artwork || isPlaceholderArt(targetPl.artwork))) {
-            targetPl.artwork = effectiveArt;
-        }
 
         // Check if any tracks in playlist are still downloading
         const hasPending = targetPl.trackIds.some(id => AppState.tracksById[id]?.isDownloading);
@@ -370,7 +360,7 @@ export function cleanupDownloadManager() {
     isInitialized = false;
 }
 
-export function startBackgroundImport({ url, targetPlaylistId, playlistName, placeholderId = null }) {
+export function startBackgroundImport({ url, targetPlaylistId, playlistName, placeholderId = null, fromCreation = false }) {
     if (typeof window === 'undefined' || !window.spindleDesktop) {
         showAlertModal('Desktop Feature', 'YouTube downloads are available in the Spindle desktop app.');
         return;
@@ -379,7 +369,8 @@ export function startBackgroundImport({ url, targetPlaylistId, playlistName, pla
     const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     activeJobs.set(jobId, {
         targetPlaylistId,
-        placeholderIds: placeholderId ? [placeholderId] : []
+        placeholderIds: placeholderId ? [placeholderId] : [],
+        fromCreation: Boolean(fromCreation)
     });
 
     window.spindleDesktop.startImport({

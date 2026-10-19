@@ -1,5 +1,4 @@
 import './style.css';
-import { DEFAULT_SYNTH_TRACKS } from './constants.js';
 import { storageDB } from './db.js';
 import { AppState, getCurrentTrack, persistState, getViewedPlaylist, updateTrackPathsOnFolderRename } from './state.js';
 import { audioEngine } from './audio.js';
@@ -35,28 +34,49 @@ async function hydrateLibrary() {
     await storageDB.init();
     const saved = await storageDB.loadMetadata();
 
-    if (saved && saved.playlists && saved.playlists.length > 0 && saved.tracks) {
-        AppState.tracksById = saved.tracks;
-        AppState.playlists = saved.playlists;
+    if (saved && (saved.playlists || saved.tracks)) {
+        AppState.tracksById = saved.tracks || {};
+        AppState.playlists = Array.isArray(saved.playlists) ? saved.playlists : [];
+
+        let libraryFixed = false;
+
+        // Clean out any legacy demo synth tracks and default playlists from earlier versions
+        for (const tid of Object.keys(AppState.tracksById)) {
+            const t = AppState.tracksById[tid];
+            if (t?.isSynth || tid.startsWith('synth-')) {
+                delete AppState.tracksById[tid];
+                libraryFixed = true;
+            }
+        }
+
+        const initialPlCount = AppState.playlists.length;
+        AppState.playlists = AppState.playlists.filter(pl => pl.id !== 'pl-default-1' && pl.id !== 'pl-default-2');
+        if (AppState.playlists.length !== initialPlCount) {
+            libraryFixed = true;
+        }
+
+        AppState.playlists.forEach(pl => {
+            if (Array.isArray(pl.trackIds)) {
+                const prevLen = pl.trackIds.length;
+                pl.trackIds = pl.trackIds.filter(tid => AppState.tracksById[tid] && !tid.startsWith('synth-'));
+                if (pl.trackIds.length !== prevLen) {
+                    libraryFixed = true;
+                }
+            }
+        });
 
         for (const track of Object.values(AppState.tracksById)) {
-            if (!track.isSynth) {
-                if (track.filePath) {
-                    track.url = `spindle-media://local/${encodeURIComponent(track.filePath)}`;
-                } else {
-                    const blob = await storageDB.getAudioBlob(track.id);
-                    if (blob) {
-                        track.url = URL.createObjectURL(blob);
-                    }
+            if (track.filePath) {
+                track.url = `spindle-media://local/${encodeURIComponent(track.filePath)}`;
+            } else {
+                const blob = await storageDB.getAudioBlob(track.id);
+                if (blob) {
+                    track.url = URL.createObjectURL(blob);
                 }
             }
         }
-        DEFAULT_SYNTH_TRACKS.forEach(st => {
-            if (!AppState.tracksById[st.id]) AppState.tracksById[st.id] = { ...st };
-        });
 
         // Auto-heal existing playlists (clean "Album - " prefixes) and upgrade artwork
-        let libraryFixed = false;
         for (const pl of AppState.playlists) {
             const cleaned = cleanPlaylistTitle(pl.name);
             if (cleaned && cleaned !== pl.name) {
@@ -93,23 +113,7 @@ async function hydrateLibrary() {
 
         for (const pl of AppState.playlists) {
             if (isPlaceholderArt(pl.artwork)) {
-                let resolved = null;
-                if (Array.isArray(pl.trackIds)) {
-                    for (const tid of pl.trackIds) {
-                        const t = AppState.tracksById[tid];
-                        if (t) {
-                            if (t.artwork && !isPlaceholderArt(t.artwork)) {
-                                resolved = upgradeArtworkUrl(t.artwork);
-                                break;
-                            }
-                            if (t.ytId && t.ytId !== 'fallback') {
-                                resolved = `https://i.ytimg.com/vi/${t.ytId}/maxresdefault.jpg`;
-                                break;
-                            }
-                        }
-                    }
-                }
-                pl.artwork = resolved;
+                pl.artwork = null;
                 libraryFixed = true;
             } else if (pl.artwork) {
                 const up = upgradeArtworkUrl(pl.artwork);
@@ -127,25 +131,8 @@ async function hydrateLibrary() {
         // Prune any orphaned IndexedDB audio blobs no longer referenced by tracksById
         await storageDB.cleanupOrphanedBlobs(Object.keys(AppState.tracksById));
     } else {
-        DEFAULT_SYNTH_TRACKS.forEach(t => {
-            AppState.tracksById[t.id] = { ...t };
-        });
-        AppState.playlists = [
-            {
-                id: 'pl-default-1',
-                name: 'Late Night Sessions',
-                color: '#C85A32',
-                artwork: null,
-                trackIds: ['synth-1', 'synth-2', 'synth-3', 'synth-4']
-            },
-            {
-                id: 'pl-default-2',
-                name: 'Evening Ambient',
-                color: '#2A6F97',
-                artwork: null,
-                trackIds: ['synth-2', 'synth-3']
-            }
-        ];
+        AppState.tracksById = {};
+        AppState.playlists = [];
         await persistState({ immediate: true });
     }
 
@@ -571,21 +558,6 @@ async function initApp() {
         }
     });
 
-    // Timer ticker for built-in synth tracks
-    const synthIntervalId = setInterval(() => {
-        const track = getCurrentTrack();
-        if (AppState.playbackState === 'PLAYING' && track && track.isSynth && !AppState.isSeeking) {
-            const tt = getTurntable();
-            if (tt && tt.mechState !== 'PLAYING') return;
-            AppState.currentTime += 0.25;
-            if (AppState.currentTime >= AppState.duration) {
-                handleTrackEnded();
-            } else {
-                updatePlayerUI();
-            }
-        }
-    }, 250);
-
     let rafId = null;
     function animate() {
         rafId = requestAnimationFrame(animate);
@@ -597,7 +569,6 @@ async function initApp() {
     animate();
 
     window.addEventListener('beforeunload', () => {
-        clearInterval(synthIntervalId);
         if (rafId !== null) cancelAnimationFrame(rafId);
         cleanupDownloadManager();
         for (const track of Object.values(AppState.tracksById)) {

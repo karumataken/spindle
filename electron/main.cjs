@@ -358,40 +358,46 @@ function isPlaceholderThumbnail(url) {
     if (lower.includes('placeholder')) return true;
     if (lower.includes('desktop/unavailable')) return true;
     if (lower.includes('default_playlist')) return true;
+    if (lower.includes('empty_playlist')) return true;
     if (lower.includes('/vi//')) return true;
+    // Any /s_p/ thumbnail without a signed ?sqp= parameter is a broken phantom URL that returns YouTube's 404 placeholder
+    if (lower.includes('/s_p/') && !lower.includes('sqp=')) {
+        return true;
+    }
+    const viMatch = url.match(/\/vi(?:_webp)?\/([^/?#]+)/);
+    if (viMatch) {
+        const id = viMatch[1];
+        if (id.length !== 11 || id.startsWith('PL') || id.startsWith('RD') || id.startsWith('UU') || id.startsWith('FL') || id.startsWith('OLAK')) {
+            return true;
+        }
+    }
     return false;
 }
 
 function resolveBestThumbnail(item) {
     if (!item) return '';
     if (Array.isArray(item.thumbnails) && item.thumbnails.length > 0) {
-        // First try to find a clean thumbnail without ?sqp=
-        for (let i = item.thumbnails.length - 1; i >= 0; i--) {
-            const u = item.thumbnails[i]?.url;
-            if (u && !isPlaceholderThumbnail(u) && !u.includes('?sqp=')) {
-                return u;
+        const valid = item.thumbnails.filter(t => t && t.url && !isPlaceholderThumbnail(t.url));
+        if (valid.length > 0) {
+            // Sort by resolution descending (width * height), fallback to index order
+            valid.sort((a, b) => ((b.width || 0) * (b.height || 0)) - ((a.width || 0) * (a.height || 0)));
+            const best = valid[0].url;
+            const m = best.match(/\/vi(?:_webp)?\/([a-zA-Z0-9_-]{11})\//);
+            if (m && !m[1].startsWith('PL') && !m[1].startsWith('OLAK')) {
+                return `https://i.ytimg.com/vi/${m[1]}/maxresdefault.jpg`;
             }
-        }
-        // If only sqp thumbnails exist, upgrade to 16:9 maxresdefault if it has video id
-        for (let i = item.thumbnails.length - 1; i >= 0; i--) {
-            const u = item.thumbnails[i]?.url;
-            if (u && !isPlaceholderThumbnail(u)) {
-                const m = u.match(/\/vi(?:_webp)?\/([a-zA-Z0-9_-]{8,})\//);
-                if (m) {
-                    return `https://i.ytimg.com/vi/${m[1]}/maxresdefault.jpg`;
-                }
-                return u;
-            }
+            return best;
         }
     }
     if (item.thumbnail && !isPlaceholderThumbnail(item.thumbnail)) {
-        const m = item.thumbnail.match(/\/vi(?:_webp)?\/([a-zA-Z0-9_-]{8,})\//);
-        if (m) {
+        const m = item.thumbnail.match(/\/vi(?:_webp)?\/([a-zA-Z0-9_-]{11})\//);
+        if (m && !m[1].startsWith('PL') && !m[1].startsWith('OLAK')) {
             return `https://i.ytimg.com/vi/${m[1]}/maxresdefault.jpg`;
         }
         return item.thumbnail;
     }
-    if (item.id && typeof item.id === 'string' && item.id.length >= 8) {
+    // Only construct maxresdefault if item.id is a genuine 11-character YouTube video ID (never a playlist or album ID)
+    if (item.id && typeof item.id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(item.id) && !item.id.startsWith('PL') && !item.id.startsWith('OLAK')) {
         return `https://i.ytimg.com/vi/${item.id}/maxresdefault.jpg`;
     }
     return '';
@@ -454,15 +460,12 @@ ipcMain.handle('spindle:youtube-inspect', async (_event, url) => {
                         };
                     });
 
-                    let plThumb = '';
-                    for (const entry of entries) {
-                        if (entry.thumbnail && !isPlaceholderThumbnail(entry.thumbnail)) {
-                            plThumb = entry.thumbnail;
-                            break;
-                        }
+                    let plThumb = resolveBestThumbnail(data);
+                    if (data.id && (data.id.startsWith('PL') || data.id.startsWith('RD') || data.id.startsWith('UU') || data.id.startsWith('FL')) && plThumb.includes('/vi/')) {
+                        plThumb = '';
                     }
-                    if (!plThumb) {
-                        plThumb = resolveBestThumbnail(data);
+                    if (isPlaceholderThumbnail(plThumb)) {
+                        plThumb = '';
                     }
 
                     return resolve({
@@ -939,15 +942,12 @@ ipcMain.handle('spindle:start-import', async (event, { jobId, url, playlistName,
                         };
                     });
 
-                    let plThumb = '';
-                    for (const entry of entries) {
-                        if (entry.thumbnail && !isPlaceholderThumbnail(entry.thumbnail)) {
-                            plThumb = entry.thumbnail;
-                            break;
-                        }
+                    let plThumb = resolveBestThumbnail(data);
+                    if (data.id && (data.id.startsWith('PL') || data.id.startsWith('RD') || data.id.startsWith('UU') || data.id.startsWith('FL')) && plThumb.includes('/vi/')) {
+                        plThumb = '';
                     }
-                    if (!plThumb) {
-                        plThumb = resolveBestThumbnail(data);
+                    if (isPlaceholderThumbnail(plThumb)) {
+                        plThumb = '';
                     }
 
                     const discoveredTitle = cleanPlaylistTitle(data.title) || playlistName;

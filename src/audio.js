@@ -5,8 +5,6 @@ export class SoundEngine {
         this.ctx = null;
         this.masterGain = null;
         this.crackleGain = null;
-        this.synthInterval = null;
-        this.stepCounter = 0;
         this.htmlAudio = htmlAudioElement || document.getElementById('html5-audio');
 
         this.onTimeUpdate = null;
@@ -37,7 +35,7 @@ export class SoundEngine {
 
         this.htmlAudio.addEventListener('timeupdate', () => {
             const track = getCurrentTrack();
-            if (track && !track.isSynth && !AppState.isSeeking) {
+            if (track && !AppState.isSeeking) {
                 AppState.currentTime = this.htmlAudio.currentTime;
                 if (this.htmlAudio.duration && !isNaN(this.htmlAudio.duration)) {
                     AppState.duration = this.htmlAudio.duration;
@@ -57,7 +55,7 @@ export class SoundEngine {
 
         this.htmlAudio.addEventListener('loadedmetadata', () => {
             const track = getCurrentTrack();
-            if (track && !track.isSynth && this.htmlAudio.duration && !isNaN(this.htmlAudio.duration)) {
+            if (track && this.htmlAudio.duration && !isNaN(this.htmlAudio.duration)) {
                 track.duration = this.htmlAudio.duration;
                 AppState.duration = this.htmlAudio.duration;
                 applyPendingSeek();
@@ -74,7 +72,7 @@ export class SoundEngine {
         this.htmlAudio.addEventListener('error', () => {
             if (this._suppressNativeEvents) return;
             const track = getCurrentTrack();
-            if (track && !track.isSynth && AppState.hasActiveSession && this.htmlAudio.getAttribute('src')) {
+            if (track && AppState.hasActiveSession && this.htmlAudio.getAttribute('src')) {
                 const mediaErr = this.htmlAudio.error;
                 console.error('[SoundEngine] Media element error:', mediaErr?.code, mediaErr?.message, track.url);
                 if (this.onAudioError) this.onAudioError(track, mediaErr);
@@ -149,46 +147,35 @@ export class SoundEngine {
         this.initContext();
         this.stopAllAudioOnly();
 
-        if (track.isSynth) {
-            if (this.htmlAudio) {
-                this._suppressNativeEvents = true;
-                this.htmlAudio.pause();
-                this._suppressNativeEvents = false;
+        if (!track.url) {
+            console.error('[SoundEngine] Track is missing playable URL:', track);
+            if (this.onAudioError) this.onAudioError(track, new Error('Missing audio URL'));
+            return;
+        }
+        if (this.htmlAudio) {
+            this._suppressNativeEvents = true;
+            const srcChanged = this.htmlAudio.src !== track.url;
+            if (srcChanged) {
+                this.htmlAudio.src = track.url;
+                this.pendingStartTime = startTime;
+            } else {
+                try {
+                    this.htmlAudio.currentTime = startTime;
+                } catch (_) {}
+                this.pendingStartTime = 0;
             }
-            AppState.currentTime = startTime;
-            AppState.duration = track.duration;
-            this.startSynthSequencer(track.synthPreset);
-        } else {
-            if (!track.url) {
-                console.error('[SoundEngine] Track is missing playable URL:', track);
-                if (this.onAudioError) this.onAudioError(track, new Error('Missing audio URL'));
-                return;
-            }
-            if (this.htmlAudio) {
-                this._suppressNativeEvents = true;
-                const srcChanged = this.htmlAudio.src !== track.url;
-                if (srcChanged) {
-                    this.htmlAudio.src = track.url;
-                    this.pendingStartTime = startTime;
-                } else {
-                    try {
-                        this.htmlAudio.currentTime = startTime;
-                    } catch (_) {}
-                    this.pendingStartTime = 0;
-                }
-                this.htmlAudio.muted = Boolean(AppState.isMuted);
-                this.htmlAudio.volume = AppState.isMuted ? 0 : AppState.volume;
-                this._suppressNativeEvents = false;
+            this.htmlAudio.muted = Boolean(AppState.isMuted);
+            this.htmlAudio.volume = AppState.isMuted ? 0 : AppState.volume;
+            this._suppressNativeEvents = false;
 
-                const playPromise = this.htmlAudio.play();
-                if (playPromise && typeof playPromise.catch === 'function') {
-                    playPromise.catch((err) => {
-                        // Ignore AbortError caused by rapid track switching
-                        if (err && err.name === 'AbortError') return;
-                        console.error('[SoundEngine] Audio play() failed:', err, track.url);
-                        if (this.onAudioError) this.onAudioError(track, err);
-                    });
-                }
+            const playPromise = this.htmlAudio.play();
+            if (playPromise && typeof playPromise.catch === 'function') {
+                playPromise.catch((err) => {
+                    // Ignore AbortError caused by rapid track switching
+                    if (err && err.name === 'AbortError') return;
+                    console.error('[SoundEngine] Audio play() failed:', err, track.url);
+                    if (this.onAudioError) this.onAudioError(track, err);
+                });
             }
         }
         this.updateCrackleLevel();
@@ -200,9 +187,7 @@ export class SoundEngine {
         if (playLiftSound) {
             this.playNeedleLiftSound();
         }
-        if (track.isSynth) {
-            this.stopSynthSequencer();
-        } else if (this.htmlAudio) {
+        if (this.htmlAudio) {
             this._suppressNativeEvents = true;
             this.htmlAudio.pause();
             this._suppressNativeEvents = false;
@@ -214,7 +199,6 @@ export class SoundEngine {
         if (playLiftSound) {
             this.playNeedleLiftSound();
         }
-        this.stopSynthSequencer();
         if (this.htmlAudio) {
             this._suppressNativeEvents = true;
             this.htmlAudio.pause();
@@ -228,7 +212,7 @@ export class SoundEngine {
         if (!track) return;
         const bounded = Math.max(0, Math.min(seconds, AppState.duration || seconds));
         AppState.currentTime = bounded;
-        if (!track.isSynth && this.htmlAudio) {
+        if (this.htmlAudio) {
             try {
                 if (this.htmlAudio.readyState >= 1) {
                     this.htmlAudio.currentTime = bounded;
@@ -363,121 +347,7 @@ export class SoundEngine {
         noiseGain.connect(this.masterGain);
         noiseSource.start(now);
     }
-
-    startSynthSequencer(preset) {
-        this.stopSynthSequencer();
-        const stepMs = 450;
-
-        const triggerStep = () => {
-            if (AppState.playbackState !== 'PLAYING') return;
-            this.playSynthStep(preset, this.stepCounter);
-            this.stepCounter++;
-        };
-
-        triggerStep();
-        this.synthInterval = setInterval(triggerStep, stepMs);
-    }
-
-    stopSynthSequencer() {
-        if (this.synthInterval) {
-            clearInterval(this.synthInterval);
-            this.synthInterval = null;
-        }
-    }
-
-    playSynthStep(preset, step) {
-        if (!this.ctx) return;
-        const now = this.ctx.currentTime;
-
-        const chords = {
-            lofi_jazz: [
-                [261.63, 329.63, 392.00, 493.88],
-                [220.00, 261.63, 329.63, 392.00],
-                [293.66, 349.23, 440.00, 523.25],
-                [196.00, 246.94, 293.66, 349.23]
-            ],
-            ambient_waltz: [
-                [293.66, 369.99, 440.00, 554.37],
-                [246.94, 329.63, 392.00, 493.88],
-                [329.63, 392.00, 493.88, 587.33],
-                [220.00, 277.18, 329.63, 392.00]
-            ],
-            zen_pluck: [
-                [261.63, 293.66, 329.63, 392.00, 440.00, 523.25],
-                [196.00, 220.00, 261.63, 293.66, 329.63, 392.00]
-            ],
-            warm_synth: [
-                [174.61, 220.00, 261.63, 329.63],
-                [164.81, 196.00, 246.94, 293.66],
-                [146.83, 174.61, 220.00, 261.63],
-                [130.81, 164.81, 196.00, 246.94]
-            ]
-        };
-
-        const set = chords[preset] || chords.lofi_jazz;
-        const chordIdx = Math.floor(step / 8) % set.length;
-        const currentChord = set[chordIdx];
-
-        if (step % 8 === 0) {
-            currentChord.forEach((freq, idx) => {
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.type = preset === 'warm_synth' ? 'sawtooth' : 'sine';
-                osc.frequency.value = freq;
-
-                const lp = this.ctx.createBiquadFilter();
-                lp.type = 'lowpass';
-                lp.frequency.value = 950;
-
-                gain.gain.setValueAtTime(0.001, now);
-                gain.gain.linearRampToValueAtTime(0.055 / (idx * 0.35 + 1), now + 0.12);
-                gain.gain.exponentialRampToValueAtTime(0.0008, now + 3.2);
-
-                osc.connect(lp);
-                lp.connect(gain);
-                gain.connect(this.masterGain);
-
-                osc.start(now);
-                osc.stop(now + 3.3);
-            });
-        }
-
-        if (step % 2 === 0 || Math.random() > 0.45) {
-            const noteFreq = currentChord[step % currentChord.length] * (step % 4 === 0 ? 2 : 1);
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-
-            osc.type = 'triangle';
-            osc.frequency.value = noteFreq;
-
-            gain.gain.setValueAtTime(0.001, now);
-            gain.gain.linearRampToValueAtTime(0.04, now + 0.03);
-            gain.gain.exponentialRampToValueAtTime(0.0005, now + 0.9);
-
-            osc.connect(gain);
-            gain.connect(this.masterGain);
-
-            osc.start(now);
-            osc.stop(now + 0.95);
-        }
-
-        if (step % 4 === 0) {
-            const bassOsc = this.ctx.createOscillator();
-            const bassGain = this.ctx.createGain();
-            bassOsc.type = 'sine';
-            bassOsc.frequency.value = currentChord[0] / 2;
-
-            bassGain.gain.setValueAtTime(0.001, now);
-            bassGain.gain.linearRampToValueAtTime(0.09, now + 0.04);
-            bassGain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
-
-            bassOsc.connect(bassGain);
-            bassGain.connect(this.masterGain);
-
-            bassOsc.start(now);
-            bassOsc.stop(now + 0.75);
-        }
-    }
 }
+
 
 export const audioEngine = new SoundEngine();
