@@ -549,17 +549,9 @@
             <span>Zoom: Scroll</span>
         </div>
 
-        <!-- Floating Interactive Needle Drop Tooltip -->
-        <div id="needle-drop-hint" class="fixed pointer-events-none hidden flex-col items-center justify-center bg-espresso/90 text-alabaster border border-stone/80 px-3.5 py-1.5 rounded-2xl shadow-xl backdrop-blur-md transition-opacity duration-150 z-50 select-none">
-            <div class="flex items-center gap-2 text-[11px] font-mono">
-                <span class="w-2 h-2 rounded-full bg-terracotta animate-pulse"></span>
-                <span id="needle-drop-label" class="font-semibold text-terracotta tracking-wider uppercase">DROP NEEDLE</span>
-                <span class="text-stone">•</span>
-                <span id="needle-drop-time" class="font-mono text-alabaster font-medium">00:00</span>
-            </div>
-            <div class="w-32 h-1 bg-stone/40 rounded-full mt-1.5 overflow-hidden">
-                <div id="needle-drop-progress" class="h-full bg-terracotta rounded-full transition-all duration-75" style="width: 0%;"></div>
-            </div>
+        <!-- Floating Interactive Needle Drop Tooltip (Minimalist, translucent seek time) -->
+        <div id="needle-drop-hint" class="fixed pointer-events-none hidden items-center justify-center bg-espresso/50 text-alabaster border border-alabaster/15 px-3 py-1 rounded-full shadow-lg backdrop-blur-md transition-opacity duration-150 z-50 select-none">
+            <span id="needle-drop-time" class="font-mono text-xs text-alabaster/95 font-medium tracking-wider">00:00</span>
         </div>
 
         <!-- Fine text prompt below the turntable for initial startup -->

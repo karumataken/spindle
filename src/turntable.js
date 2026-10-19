@@ -1944,9 +1944,7 @@ export class Turntable3D {
         const dom = this.renderer.domElement;
 
         const hintEl = document.getElementById('needle-drop-hint');
-        const hintLabel = document.getElementById('needle-drop-label');
         const hintTime = document.getElementById('needle-drop-time');
-        const hintProgress = document.getElementById('needle-drop-progress');
 
         const updateMouseCoords = (e) => {
             const rect = dom.getBoundingClientRect();
@@ -1990,24 +1988,19 @@ export class Turntable3D {
                     if (hintEl) {
                         hintEl.classList.remove('hidden');
                         hintEl.classList.add('flex');
-                        hintEl.style.left = `${Math.min(window.innerWidth - 200, Math.max(20, e.clientX - 75))}px`;
-                        hintEl.style.top = `${Math.max(20, e.clientY - 70)}px`;
+                        hintEl.style.left = `${Math.min(window.innerWidth - 80, Math.max(16, e.clientX - 32))}px`;
+                        hintEl.style.top = `${Math.max(16, e.clientY - 42)}px`;
 
                         if (targetYaw < 0.25) {
-                            if (hintLabel) hintLabel.textContent = 'REST CRADLE';
-                            if (hintTime) hintTime.textContent = 'Stop Playback';
-                            if (hintProgress) hintProgress.style.width = '0%';
+                            if (hintTime) hintTime.textContent = 'Stop';
                         } else if (targetYaw > 0.80) {
-                            if (hintLabel) hintLabel.textContent = 'RUN-OUT';
-                            if (hintTime) hintTime.textContent = 'End of Track';
-                            if (hintProgress) hintProgress.style.width = '100%';
+                            const totalSec = AppState.duration || 135;
+                            if (hintTime) hintTime.textContent = formatTime(totalSec);
                         } else {
                             const progress = THREE.MathUtils.clamp((targetYaw - 0.44) / 0.34, 0, 1);
                             const totalSec = AppState.duration || 135;
                             const curSec = progress * totalSec;
-                            if (hintLabel) hintLabel.textContent = 'DROP NEEDLE';
-                            if (hintTime) hintTime.textContent = `${formatTime(curSec)} (${Math.round(progress * 100)}%)`;
-                            if (hintProgress) hintProgress.style.width = `${Math.round(progress * 100)}%`;
+                            if (hintTime) hintTime.textContent = formatTime(curSec);
                         }
                     }
                 }
