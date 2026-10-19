@@ -2053,9 +2053,8 @@ export async function showAboutModal() {
     openModal('About Spindle', `
         <div class="space-y-4 text-center py-2">
             <div class="flex justify-center mb-1">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 102 46" class="h-12 w-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 125 46" class="h-12 w-auto">
                     <text x="2" y="35" font-family="'Caveat', cursive" font-weight="600" font-size="42" fill="#C85A32">Spindle</text>
-                    <circle cx="45" cy="15" r="3.2" fill="#1E1B18"/>
                 </svg>
             </div>
             <div>
